@@ -1,0 +1,7 @@
+requests==2.34.2
+python-dotenv==1.2.4
+huggingface-hub==1.33.0
+google-genai==1.42.0
+google-cloud-storage==3.4.0
+nbformat==5.10.4
+fsspec==2026.7.0

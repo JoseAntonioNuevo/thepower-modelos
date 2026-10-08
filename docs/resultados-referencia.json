@@ -1,0 +1,86 @@
+{
+  "fecha": "2026-10-02",
+  "modelo": "Qwen/Qwen3-0.6B",
+  "revision": "c1899de289a04d12100db370d81485cdf75e47ca",
+  "hardware_qwen": "Apple M5 / 24 GB / MPS",
+  "dataset": "sintetico 240/30/30",
+  "limitaciones": [
+    "Diversidad limitada; no es un ranking universal",
+    "Gemini Google base y ajustado pendientes",
+    "Coste local de hardware/energia no medido",
+    "Dependencias públicas actualizadas por seguridad; estas cifras pertenecen al entorno anterior, no a una ejecución nueva."
+  ],
+  "resultados": {
+    "qwen_base": {
+      "casos": 30,
+      "json_valido": 30,
+      "esquema_valido": 29,
+      "categoria_correcta": 14,
+      "prioridad_correcta": 7,
+      "ambas_correctas": 3,
+      "errores": 0,
+      "latencia_mediana_s": 3.2658777505130274,
+      "coste_usd": null
+    },
+    "qwen_fewshot": {
+      "casos": 30,
+      "json_valido": 30,
+      "esquema_valido": 27,
+      "categoria_correcta": 15,
+      "prioridad_correcta": 19,
+      "ambas_correctas": 10,
+      "errores": 0,
+      "latencia_mediana_s": 3.3389281044946983,
+      "coste_usd": null
+    },
+    "qwen_lora": {
+      "casos": 30,
+      "json_valido": 30,
+      "esquema_valido": 30,
+      "categoria_correcta": 26,
+      "prioridad_correcta": 29,
+      "ambas_correctas": 26,
+      "errores": 0,
+      "latencia_mediana_s": 3.0711329794867197,
+      "coste_usd": null
+    },
+    "gemini_base": {
+      "casos": 0,
+      "estado": "PENDIENTE; no hay ejecución"
+    },
+    "gemini_ajustado": {
+      "casos": 0,
+      "estado": "PENDIENTE; no hay ejecución"
+    },
+    "claude_prompt": {
+      "casos": 30,
+      "json_valido": 30,
+      "esquema_valido": 30,
+      "categoria_correcta": 26,
+      "prioridad_correcta": 28,
+      "ambas_correctas": 24,
+      "errores": 0,
+      "latencia_mediana_s": 1.4164089164842153,
+      "coste_usd": 0.024892
+    },
+    "gemini_openrouter_demo": {
+      "casos": 30,
+      "json_valido": 30,
+      "esquema_valido": 30,
+      "categoria_correcta": 26,
+      "prioridad_correcta": 30,
+      "ambas_correctas": 26,
+      "errores": 0,
+      "latencia_mediana_s": 1.1045846880006138,
+      "coste_usd": 0.00439975
+    }
+  },
+  "versiones_entorno_referencia": {
+    "torch": "2.8.0",
+    "transformers": "4.56.2",
+    "datasets": "4.1.1",
+    "trl": "0.23.1",
+    "peft": "0.17.1",
+    "accelerate": "1.10.1"
+  }
+}

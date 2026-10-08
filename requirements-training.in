@@ -1,0 +1,8 @@
+-r requirements.in
+torch==2.14.1
+transformers==5.19.0
+datasets==5.1.0
+trl==1.14.0
+peft==0.21.2
+accelerate==1.15.0
+ipykernel==6.30.1
