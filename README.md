@@ -9,6 +9,18 @@ Código y datos sintéticos bajo MIT. Qwen y las dependencias conservan sus
 propias licencias. No se distribuyen pesos, credenciales, resultados locales
 ni material personal del profesor.
 
+## Cómo leer el código en clase
+
+Los módulos, scripts, pruebas y celdas Python están comentados en español.
+Cada archivo empieza con su propósito y recorrido; los comentarios de función
+explican entradas, resultados y decisiones. En el entrenador también se explican
+las máscaras de tokens, los parámetros SFT/LoRA y los archivos guardados.
+
+Sigue el [índice de lectura paso a paso](docs/guia-codigo.md): ejemplo de datos →
+instrucciones → conversación → tokens → entrenamiento → adaptador → consulta
+y evaluación. Los notebooks mantienen desactivadas por defecto la inferencia
+y el entrenamiento. Leer un comando no lo ejecuta.
+
 ## Instalación
 
 Clona el repo, abre su carpeta y utiliza Python 3.12. Con [uv](https://docs.astral.sh/uv/):
