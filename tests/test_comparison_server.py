@@ -1,7 +1,7 @@
 # GUÍA DE LECTURA · tests/test_comparison_server.py
 # Pruebas HTTP reales contra un servidor local con un motor simulado.
 # Comprueban modelos, streaming, CORS, Host y saturación de la cola.
-# El puerto 0 pide un puerto libre al sistema y evita depender del servidor del profesor.
+# El puerto 0 pide un puerto libre al sistema y evita depender de un servidor que ya esté en marcha.
 # Estas pruebas no cargan Qwen ni acreditan la calidad de sus respuestas.
 
 """Contrato HTTP de las dos condiciones y del streaming usado por isbetter.ai."""

@@ -45,9 +45,9 @@ un servidor del propio equipo.
 
 ## Publicación y comunicación de problemas
 
-Git excluye .env, pesos, resultados, material personal y metadatos locales.
+Git excluye .env, pesos, resultados, carpetas de trabajo local y metadatos de editores.
 No incluyas secretos o datos privados en issues públicos. Una clave filtrada
 requiere revocación/rotación con su proveedor; borrarla no revoca su acceso.
 Las revisiones se refieren a su versión y alcance, no certifican despliegues.
 Los locks fijan versiones, hashes y marcadores por plataforma. El estado de
-avisos conocido y las verificaciones locales se detallan en docs/publicacion.md.
+avisos conocidos y las verificaciones se detallan en docs/publicacion.md.

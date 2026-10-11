@@ -51,7 +51,7 @@ claves.
 ## Cómo localizar la respuesta a una duda
 
 1. Confirma la raíz de la copia abierta y su estado con `git status --short --branch`.
-   Las rutas de esta guía son relativas a esa raíz; no uses rutas del Mac del profesor.
+   Las rutas de esta guía son relativas a esa raíz; no uses rutas absolutas de otro equipo.
 2. Para «¿cómo hago…?» empieza por `docs/preguntas-frecuentes.md`. Lee `README.md`
    para el contexto de las clases y los recorridos, y `docs/guia-codigo.md` para el
    orden de lectura. Después abre la función y sus llamadas relacionadas.
@@ -160,7 +160,7 @@ claves.
 En Git están código, datos sintéticos, prompts, locks, notebooks y docs.
 `modelos/`, `resultados/`, `material/`, `.build/`, `.env` y entornos son locales
 e ignorados. Es normal que no existan en una copia nueva: no remitas al alumno
-a Obsidian, ZIP, capturas, adaptadores o cuentas privadas del profesor.
+a notas, ZIP, capturas o adaptadores que no están en Git, ni a cuentas de otra persona.
 
 El checkpoint original se descarga con `scripts/descargar_modelo.py`; el
 adaptador se obtiene al entrenar. Tras entrenar, su carpeta contiene
@@ -181,7 +181,7 @@ sin secretos. Pide solo la información que falte; inspecciona lo disponible.
 | `adaptador_local: false` o faltan archivos PEFT | Normal antes de entrenar; confirma `--adaptador`, carpeta y `adapter_config.json`. No inventes un adaptador ni asumas que viene en Git. |
 | `Salida no vacía` o archivo de resultados existente | Conserva lo anterior y usa una ruta nueva con `--salida`. No borres artefactos para quitar el error. |
 | `Datos o protocolo cambiaron` | Revisa `git diff -- datos prompts config`, variables públicas de modelo/revisión y `assert_frozen`. Explica la diferencia; no cambies hashes a ciegas. |
-| Falta memoria o entrenamiento lento | Dispositivo elegido en `load_qwen`, proceso activo y recursos disponibles. CPU puede ser lenta; no prometas el tiempo del profesor ni cambies receta/modelo sin identificar otra variante. |
+| Falta memoria o entrenamiento lento | Dispositivo elegido en `load_qwen`, proceso activo y recursos disponibles. CPU puede ser lenta; no prometas los tiempos de referencia ni cambies receta/modelo sin identificar otra variante. |
 | No hay GPU o laboratorio para completar la ejecución | Consulta las modalidades de `docs/ejercicio.md`. Ayuda a preparar código/datos/configuración y deja las métricas no obtenidas pendientes; no contrates recursos ni inventes entrenamiento para completar la entrega. |
 | Respuesta inválida o LoRA no mejora | Reglas, salida original, `validate_answer` y métricas separadas. Un error es resultado del experimento; no repares ni ajustes con test. |
 | isbetter no conecta | Servidor propio en 1235 frente a LM Studio en 1234, URL `/v1`, catálogo y `/health`, Host/Origin y permiso del navegador. No desactives controles ni abras el servidor a la red. |
@@ -229,4 +229,4 @@ datos sintéticos y sigue `SECURITY.md`; no expongas la API por LAN o túneles.
 
 Para APIs/librerías externas, consulta documentación oficial de la versión
 instalada cuando haga falta, usando los conectores disponibles; no supongas
-que el alumno dispone de los servicios o herramientas privados del profesor.
+que el alumno dispone de servicios o herramientas que no ha configurado.

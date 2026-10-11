@@ -1,102 +1,89 @@
-# Preparación para publicación
+# Seguridad, dependencias y verificación
 
-Revisión local del 9 de octubre de 2026. La publicación en GitHub es un paso
-posterior: tener este código preparado no crea un repositorio remoto ni cambia
-la visibilidad de ningún servicio o adaptador.
+Qué incluye el repositorio público, qué controles de seguridad tiene el código
+y cómo se han comprobado las dependencias. Los límites de uso están en
+[SECURITY.md](../SECURITY.md).
 
-## Contenido público
+## Qué contiene el repositorio
 
 Código Python, datos de soporte sintéticos, prompts, configuración congelada,
-notebooks sin resultados embebidos, ejercicio, documentación, tests, licencia
-MIT y un workflow de contratos. Los pesos Qwen y sus dependencias conservan
-sus licencias. El usuario descarga el original y entrena su adaptador.
+notebooks sin resultados embebidos, ejercicios, documentación, tests, licencia
+MIT y un workflow de contratos. Los pesos de Qwen y las dependencias conservan
+sus propias licencias: cada persona descarga el modelo original y entrena su
+propio adaptador.
 
 `.gitignore` excluye `.env`, credenciales, entornos, `modelos/`, `resultados/`,
-`material/`, `.build/`, metadatos de Obsidian y archivos de claves. El material
-del profesor y los entrenamientos anteriores permanecen en la copia local.
-No se distribuye el historial del repositorio padre.
+`material/`, `.build/`, metadatos de editores y archivos de claves. Ninguno de
+esos contenidos se publica.
 
-## Revisión y correcciones
+## Controles de seguridad del código
 
-Codex Security realizó un Standard scan estático del inventario público inicial
-de 47 archivos, con análisis independiente de arquitectura y salidas. No leyó
-credenciales, pesos, resultados privados ni historial, y no contactó proveedores.
-Encontró dos controles incompletos, de severidad baja por las condiciones de
-uso local y opcional:
+Antes de publicar se hizo una revisión estática de seguridad del código. Se
+corrigieron dos controles incompletos, de severidad baja por tratarse de uso
+local y opcional:
 
-- Las respuestas HTTP se almacenaban completas antes de validarlas. Los clientes
-  usan ahora `stream=True` y un lector común que cuenta bytes descomprimidos,
-  rechaza más de 1 MiB y cierra la conexión. Desactiva redirecciones automáticas
-  para impedir buffering de sus cuerpos. Limita profundidad, listas y texto
-  antes de agregarlos; no convierte una respuesta truncada en un resultado.
-  El texto completo recibido dentro de ese límite permanece en la evidencia,
-  aunque supere los 16.384 caracteres permitidos para validación. Un cuerpo
-  HTTP rechazado no se conserva completo; se registra el fallo.
-- El CSV podía interpretar prefijos de fórmulas en respuestas originales o
-  metadatos de proveedor. La exportación marca esas celdas como texto. JSON y
-  JSONL conservan la evidencia exacta, incluidos resultados inválidos.
+- **Respuestas HTTP acotadas.** Los clientes usan `stream=True` y un lector
+  común que cuenta bytes descomprimidos, rechaza más de 1 MiB y cierra la
+  conexión. No siguen redirecciones automáticas. Limitan profundidad, listas y
+  texto antes de agregarlos, y no convierten una respuesta truncada en un
+  resultado. El texto recibido dentro del límite se conserva completo en la
+  evidencia aunque supere los 16.384 caracteres admitidos para validación; un
+  cuerpo rechazado no se conserva y se registra el fallo.
+- **CSV seguro.** La exportación marca como texto las celdas que una hoja de
+  cálculo podría interpretar como fórmula. JSON y JSONL conservan la evidencia
+  exacta, incluidos resultados inválidos.
 
-También se reforzaron Host/Origin, admisión y colas de la API loopback, carga
-Safetensors sin código remoto, comprobación del protocolo en la demo y rechazo
-de sobrescritura de adaptadores. La API conserva los mismos dos modelos, SSE,
-greedy, 180 tokens y thinking desactivado. Las pruebas incluyen cuerpos sin
-Content-Length o con longitud falsa, gzip, salidas largas/profundas, catálogos
-malformados, CSV y controles legítimos de OpenRouter, Google y LM Studio
-simulados. No se consumió inferencia de pago para estas pruebas.
+También se reforzaron la validación de Host/Origin, la admisión y la cola de la
+API local, la carga de pesos Safetensors sin código remoto, la comprobación del
+protocolo en la demo y el rechazo a sobrescribir adaptadores. Las rutas remotas
+leen las claves del entorno, no las registran y exigen https hacia servidores
+que no sean del propio equipo.
 
-El informe original describe la versión auditada **antes de corregir**. No se
-reescribió para ocultar sus hallazgos. La corrección se verifica por pruebas y
-revisión del parche, no por cambiar las etiquetas del informe original.
+Los tests cubren cuerpos sin `Content-Length` o con longitud falsa, gzip,
+salidas largas o profundas, catálogos malformados, CSV, la elección de
+proveedor y la petición de cada ruta remota, siempre con proveedores
+simulados: ninguna prueba consume inferencia de pago.
 
 ## Dependencias
 
-La consulta complementaria de avisos con `pip-audit` detectó vulnerabilidades
-conocidas en versiones antiguas. El entorno de instalación pública se actualizó
-a PyTorch 2.14.1, Transformers 5.19.0, Datasets 5.1.0, Accelerate 1.15.0,
-PEFT 0.21.2, TRL 1.14.0, Requests 2.34.2, python-dotenv 1.2.4 y fsspec 2026.7.0.
-Hugging Face Hub 1.33.0 satisface las restricciones de Tokenizers y Datasets.
+Los locks fijan versiones y hashes de distribuciones, con marcadores para
+dependencias específicas de Windows, macOS y Linux. `requirements.lock`
+(contratos y rutas remotas) y `requirements-training.lock` (más PyTorch,
+Transformers, Datasets, TRL, PEFT y Accelerate) incluyen el SDK oficial
+`anthropic` 1.13.0.
 
-Los locks fijan versiones y hashes de distribuciones y añaden marcadores para
-las dependencias específicas de Windows, macOS y Linux. La consulta de los
-131 pares paquete/versión de ambos locks, incluidos los de otras plataformas,
-no encontró avisos conocidos en esa fecha. Esto no prueba ausencia de fallos
-desconocidos ni sustituye futuras actualizaciones. No se ejecutó CUDA/Windows.
+El 12 de octubre de 2026, `pip-audit` no encontró vulnerabilidades conocidas en
+los paquetes de ninguno de los dos locks. Esto no prueba la ausencia de fallos
+desconocidos ni sustituye futuras actualizaciones.
 
-El modelo/revisión, datos, template y parámetros permanecen congelados. El
-entorno anterior y su adaptador no se actualizan automáticamente. Las cifras
-en `resultados-referencia.json` identifican las versiones que las produjeron;
-el entorno nuevo debe generar sus propios resultados, sin atribuirse los antiguos.
+El modelo, su revisión, los datos, el template y los parámetros están
+congelados. Las cifras de `resultados-referencia.json` identifican las versiones
+que las produjeron; un entorno nuevo genera sus propios resultados.
 
-## Verificación y límites
+## Verificación
 
-El ensayo del entorno actualizado completó dos épocas y 60 pasos en 363,7
-segundos con MPS en macOS. Recargó el adaptador y comprobó las dos condiciones
-en la misma instancia del motor compartido. En DE-04, el original produjo
-`cobros` (fuera del enum) y el LoRA `facturacion`/`media` con el esquema esperado.
-Es un caso de desarrollo, no una nueva evaluación de los 30 casos de test ni
-una promesa de seis minutos en otros equipos. Los intentos de compatibilidad
-fallidos se conservaron localmente; no se contabilizan como entrenamiento válido.
+Con el entorno actualizado, un entrenamiento completó dos épocas y 60 pasos en
+unos 6 minutos con MPS en macOS, recargó el adaptador y comprobó las dos
+condiciones en el mismo motor. En `DE-04`, el original produjo `cobros` (fuera
+de las categorías admitidas) y el LoRA `facturacion`/`media` con el esquema
+esperado. Es un caso de desarrollo, no una evaluación de los 30 casos de test ni
+una promesa de tiempo en otros equipos.
 
-Los contratos y notebooks por defecto se comprueban en una exportación de los
-archivos preparados para Git, con entorno nuevo, sin `.env`, pesos, adaptador
-ni material del profesor. La inferencia y entrenamiento local se ensayan por
-separado con la misma revisión pública Qwen ya disponible en caché.
-
-Para repetir los contratos:
+Los contratos se comprueban en una copia limpia del repositorio, con un entorno
+nuevo y sin `.env`, pesos ni adaptador. Para repetirlos:
 
 ```bash
 uv venv --python 3.12 .venv
 uv pip sync --python .venv requirements.lock
+source .venv/bin/activate
 python -m compileall -q curso scripts tests
 python -m unittest discover -s tests -v
 python scripts/preflight.py
 ```
 
-Activa el entorno antes de ejecutar `python`. Para entrenar, usa el lock de
-entrenamiento y sigue el README. La receta calcula la pérdida sobre la
-respuesta; `labels=-100` en el prompt mantiene explícita esa máscara en TRL.
+Para entrenar, usa el lock de entrenamiento y sigue el [README](../README.md).
 
-Las comprobaciones locales no prueban CI alojada, permisos de GitHub, costes,
-Google tuning, publicación HF, seguridad de isbetter.ai ni equipos de alumnos.
-No expongas la API fuera de loopback. No sustituyas estos datos por información
-personal para una demostración pública.
+Estas comprobaciones no prueban CI alojada, permisos de GitHub, costes, el
+ajuste en Google Cloud, la publicación en Hugging Face, la seguridad de
+isbetter.ai ni el equipo de cada alumno. No expongas la API fuera de loopback y
+no sustituyas los datos sintéticos por información personal.

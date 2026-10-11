@@ -46,9 +46,9 @@ ninguna inferencia. Código: `scripts/preflight.py:main`.
 ### ¿Qué no viene en el repo y por qué?
 
 Los pesos del modelo, los adaptadores (`modelos/`), los resultados
-(`resultados/`), tu `.env` y el material del profesor (`material/`). Los pesos
-se descargan con un script, el adaptador se obtiene al entrenar y las claves son
-personales. Es normal que esas carpetas no existan en una copia nueva.
+(`resultados/`), tu `.env` y las carpetas de trabajo local (`material/`). Los
+pesos se descargan con un script, el adaptador se obtiene al entrenar y las
+claves son personales. Es normal que esas carpetas no existan en una copia nueva.
 
 ## Datos y reglas
 

@@ -158,7 +158,7 @@ docs/                     Guía del código, preguntas frecuentes, protocolo, ej
 
 No vienen en Git, y es normal que no existan en una copia nueva: pesos del
 modelo, adaptadores (`modelos/`), resultados (`resultados/`), tu `.env` con
-claves y el material privado del profesor (`material/`). El modelo se descarga
+claves y las carpetas de trabajo local (`material/`). El modelo se descarga
 con un script y el adaptador se obtiene al entrenar.
 
 ## Instalación
@@ -414,7 +414,7 @@ comprueba lo que te diga en el código, que es la fuente de verdad.
 | [docs/resultados-referencia.json](docs/resultados-referencia.json) | Cifras de referencia fechadas y sus limitaciones |
 | [AGENTS.md](AGENTS.md) | Guía para asistentes de IA |
 | [SECURITY.md](SECURITY.md) | Límites de seguridad |
-| [docs/publicacion.md](docs/publicacion.md) | Revisión previa a la publicación del repo |
+| [docs/publicacion.md](docs/publicacion.md) | Controles de seguridad, dependencias y verificación |
 
 Los notebooks recorren las clases por etapas con la inferencia y el entrenamiento
 desactivados por defecto: `notebooks/S7-LoRA.ipynb` (datos, template, few-shot,
