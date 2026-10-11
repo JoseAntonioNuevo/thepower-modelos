@@ -21,6 +21,10 @@ instrucciones → conversación → tokens → entrenamiento → adaptador → c
 y evaluación. Los notebooks mantienen desactivadas por defecto la inferencia
 y el entrenamiento. Leer un comando no lo ejecuta.
 
+Si trabajas con un agente, [AGENTS.md](AGENTS.md) contiene el mapa de dudas,
+las funciones que debe inspeccionar, cómo explicar el código y cómo diagnosticar
+errores sin alterar el experimento. `CLAUDE.md` enlaza ese mismo archivo.
+
 ## Instalación
 
 Clona el repo, abre su carpeta y utiliza Python 3.12. Con [uv](https://docs.astral.sh/uv/):
