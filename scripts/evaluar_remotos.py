@@ -1,6 +1,8 @@
 # GUÍA DE LECTURA · scripts/evaluar_remotos.py
-# Evalúa Claude/OpenRouter o Gemini con los mismos datos y validador de S7.
-# La condición ajustada necesita identificar explícitamente su modelo Google.
+# Evalúa modelos remotos con los mismos datos y validador de S7.
+# claude_prompt y remoto_basico usan la ruta de .env (LLM_PROVIDER/LLM_MODEL) o de
+# --proveedor/--modelo: por defecto, Claude Haiku 5.5 por la API de Anthropic.
+# Gemini base/ajustado van por Google Cloud; la condición ajustada necesita su recurso.
 # Un fallo permanece en los resultados y no se sustituye por otro modelo.
 # Las llamadas remotas pueden consumir presupuesto; no se hacen al importar el archivo.
 
@@ -19,7 +21,15 @@ from pathlib import Path
 from curso.common import ROOT, read_jsonl, assert_frozen, validate_answer, write_jsonl
 
 # Reutiliza funciones del núcleo compartido para mantener el mismo protocolo entre scripts.
-from curso.remote import chat_openrouter, chat_google
+from curso.remote import chat, require_credentials, route
+
+
+# Condiciones con ruta fija: el par Gemini del ejercicio y la demo histórica por OpenRouter.
+FIXED_ROUTES = {
+    "gemini_base": ("google", "gemini-3.1-flash-lite"),
+    "gemini_ajustado": ("google", None),
+    "gemini_openrouter_demo": ("openrouter", "google/gemini-3.1-flash-lite"),
+}
 
 
 # Selecciona ruta y modelo remotos, recorre los casos y conserva un resultado por caso.
@@ -31,6 +41,7 @@ def main():
         "--condicion",
         choices=(
             "claude_prompt",
+            "remoto_basico",
             "gemini_base",
             "gemini_ajustado",
             "gemini_openrouter_demo",
@@ -39,6 +50,8 @@ def main():
     )
     # Opción de terminal '--modelo': el parser aplica tipo, valores permitidos y obligatoriedad definidos aquí.
     # Opción de terminal '--salida': el parser aplica tipo, valores permitidos y obligatoriedad definidos aquí.
+    # Opción de terminal '--proveedor': ruta de claude_prompt/remoto_basico; sin ella se usa .env.
+    p.add_argument("--proveedor")
     p.add_argument("--modelo")
     p.add_argument("--salida", required=True)
     # Opción de terminal '--split': el parser aplica tipo, valores permitidos y obligatoriedad definidos aquí.
@@ -55,30 +68,41 @@ def main():
     # El recurso ajustado no se puede deducir: debe proceder de un entrenamiento Google real.
     if args.condicion == "gemini_ajustado" and not args.modelo:
         p.error("Indica el recurso de modelo ajustado")
-    # Selecciona referencias por condición, conservando un --modelo explícito si se proporcionó.
-    model = args.modelo or {
-        "claude_prompt": "anthropic/claude-haiku-4.5",
-        "gemini_base": "gemini-3.1-flash-lite",
-        "gemini_openrouter_demo": "google/gemini-3.1-flash-lite",
-    }.get(args.condicion)
+    # Ruta fija para Gemini; las demás condiciones admiten cualquier proveedor configurado.
+    if args.condicion in FIXED_ROUTES:
+        provider, default_model = FIXED_ROUTES[args.condicion]
+        # Validación previa: estas condiciones no cambian de proveedor.
+        if args.proveedor and args.proveedor != provider:
+            p.error(f"{args.condicion} usa siempre la ruta {provider}")
+        provider, model = provider, args.modelo or default_model
+    else:
+        provider, model = args.proveedor, args.modelo
+    # Resuelve y valida la ruta antes del lote: una configuración incompleta no genera 30 errores.
+    try:
+        provider, model = route(provider, model)
+        require_credentials(provider)
+    except ValueError as exc:
+        p.error(str(exc))
+    # claude_prompt recibe los cuatro ejemplos few-shot fijados; el resto, el prompt básico.
+    fewshot = args.condicion == "claude_prompt"
     # Resultados acumulados, incluyendo errores, para conservar un caso por entrada.
     results = []
     # Recorre cada registro de la partición elegida; conserva el ID para relacionar entradas y resultados.
     for row in read_jsonl(ROOT / f"datos/{args.split}.jsonl"):
         try:
-            # Elige API por condición; Claude recibe los ejemplos few-shot fijados y Gemini/OpenRouter es adicional.
-            result = (
-                chat_openrouter(
-                    row["incidencia"], model, args.condicion == "claude_prompt"
-                )
-                if args.condicion in ("claude_prompt", "gemini_openrouter_demo")
-                else chat_google(row["incidencia"], model)
-            )
+            # Misma ruta y modelo en todos los casos del lote.
+            result = chat(row["incidencia"], provider, model, fewshot)
             # Tipo de fallo del caso; None indica que la petición/generación terminó sin esa excepción.
             error = None
         except Exception as exc:
             # Conserva el fallo sin respuesta/tiempo/coste inventados; el tipo de excepción identifica el error.
-            result = {"respuesta_original": None, "latencia_s": None, "coste_usd": None}
+            result = {
+                "respuesta_original": None,
+                "latencia_s": None,
+                "coste_usd": None,
+                "model": model,
+                "ruta": provider,
+            }
             error = type(exc).__name__
         # Guarda original, objetivo, fallo y fecha con el mismo manifiesto utilizado para el resto del lote.
         results.append(

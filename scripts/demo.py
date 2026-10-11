@@ -1,6 +1,8 @@
 # GUÍA DE LECTURA · scripts/demo.py
 # Ejecuta una consulta de desarrollo y conserva la respuesta tal como llegó.
-# --proveedor elige el recorrido local/servicio; --adaptador activa LoRA con Qwen.
+# --proveedor elige el recorrido: qwen (Transformers) o una ruta de curso.remote.
+# Sin --proveedor se usa LLM_PROVIDER/LLM_MODEL de .env (por defecto, Claude por Anthropic).
+# --adaptador activa LoRA con Qwen.
 # --fewshot cambia los mensajes enviados, no entrena el modelo.
 # La valoración compara con el objetivo y no modifica la respuesta generada.
 # --salida guarda evidencia y rechaza sobrescribir un archivo existente.
@@ -19,15 +21,17 @@ from pathlib import Path
 # Reutiliza funciones del núcleo compartido para mantener el mismo protocolo entre scripts.
 from curso.common import ROOT, read_jsonl, validate_answer, assert_frozen
 
+# Rutas remotas/locales disponibles; la clave coincide con los valores de LLM_PROVIDER.
+from curso.remote import PROVEEDORES
+
 
 # Lee el caso y los argumentos, llama al proveedor y registra respuesta/valoración.
 def main():
     # Parser de argumentos: describe las opciones que admite este comando.
     p = argparse.ArgumentParser(description="Un caso de desarrollo; no usa el test.")
     # Opción de terminal '--proveedor': el parser aplica tipo, valores permitidos y obligatoriedad definidos aquí.
-    p.add_argument(
-        "--proveedor", choices=("local", "openrouter", "qwen", "google"), required=True
-    )
+    # Sin valor, la ruta sale de LLM_PROVIDER en .env.
+    p.add_argument("--proveedor", choices=("qwen", *PROVEEDORES))
     # Opción de terminal '--modelo': el parser aplica tipo, valores permitidos y obligatoriedad definidos aquí.
     # Opción de terminal '--caso': el parser aplica tipo, valores permitidos y obligatoriedad definidos aquí.
     p.add_argument("--modelo")
@@ -57,28 +61,24 @@ def main():
         model, tok, device = load_qwen(args.adaptador)
         # Consulta una incidencia de desarrollo, no los casos reservados de test.
         result = generate(model, tok, device, row["incidencia"], args.fewshot)
+    # Ruta LM Studio: --local-api decide petición nativa o compatible.
+    elif args.proveedor == "local":
+        # Reutiliza funciones del núcleo compartido para mantener el mismo protocolo entre scripts.
+        from curso.remote import chat_local
+
+        result = chat_local(
+            row["incidencia"], args.modelo, args.fewshot, args.local_api == "native"
+        )
     else:
         # Reutiliza funciones del núcleo compartido para mantener el mismo protocolo entre scripts.
-        from curso.remote import chat_local, chat_openrouter, chat_google
+        from curso.remote import chat
 
-        # Ruta LM Studio: --local-api decide petición nativa o compatible.
-        if args.proveedor == "local":
-            result = chat_local(
-                row["incidencia"], args.modelo, args.fewshot, args.local_api == "native"
-            )
-        # Ruta del servicio OpenRouter: requiere identificar explícitamente qué modelo consumir.
-        elif args.proveedor == "openrouter":
-            # Falla con ayuda CLI cuando falta el ID del modelo requerido por la ruta remota.
-            if not args.modelo:
-                p.error("--modelo es obligatorio para OpenRouter")
-            # Envía prompt y opcional few-shot por el servicio remoto elegido.
-            result = chat_openrouter(row["incidencia"], args.modelo, args.fewshot)
-        else:
-            # Falla con ayuda CLI cuando falta el ID del modelo requerido por la ruta remota.
-            if not args.modelo:
-                p.error("--modelo es obligatorio para Google")
-            # Consulta el recurso Google explícito, que puede identificar un modelo base o ajustado.
-            result = chat_google(row["incidencia"], args.modelo)
+        # Ruta de --proveedor o de .env; --modelo sustituye a LLM_MODEL.
+        try:
+            result = chat(row["incidencia"], args.proveedor, args.modelo, args.fewshot)
+        # Configuración incompleta (modelo, clave o URL): ayuda CLI en lugar de una traza.
+        except ValueError as exc:
+            p.error(str(exc))
     # Evidencia de un caso con entrada, objetivo, respuesta original, fecha y valoración.
     record = {
         "id": row["id"],

@@ -3,6 +3,8 @@
 
 # Cliente HTTP para OpenRouter y API local: límites y cierre están en curso/http.py.
 requests==2.34.2
+# SDK oficial de Anthropic: Claude se consulta por su Messages API nativa.
+anthropic==1.13.0
 # Carga configuración .env sin incluir claves en el código.
 python-dotenv==1.2.4
 # Descarga checkpoints y publica/recarga adaptadores del Hub.

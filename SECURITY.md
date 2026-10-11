@@ -36,8 +36,12 @@ o una dependencia comprometidos. Instala dependencias en un entorno separado.
 
 No exponer el puerto por LAN, proxy inverso, túnel ni servicio público.
 Usa únicamente datos sintéticos. Los costes de hardware/energía no se miden.
-Google Cloud, OpenRouter y publicación HF son rutas CLI opcionales del
-operador, nunca acciones de la API ni efectos de importar módulos.
+Los proveedores remotos (Anthropic, OpenAI, OpenRouter, APIs compatibles,
+Gemini, Google Cloud) y la publicación HF son rutas CLI opcionales del
+operador, nunca acciones de la API ni efectos de importar módulos. Las claves
+se leen del entorno; los registros guardan parámetros y metadatos, no claves.
+`COMPAT_BASE_URL` remota exige https: las claves solo viajan sin cifrar hacia
+un servidor del propio equipo.
 
 ## Publicación y comunicación de problemas
 

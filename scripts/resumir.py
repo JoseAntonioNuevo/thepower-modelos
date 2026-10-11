@@ -20,7 +20,7 @@ from pathlib import Path
 from curso.common import ROOT, read_jsonl
 
 
-# Seis condiciones del ejercicio; Gemini/OpenRouter se presenta como demo adicional.
+# Seis condiciones del ejercicio; las adicionales se informan aparte.
 CONDITIONS = (
     "qwen_base",
     "qwen_fewshot",
@@ -29,6 +29,8 @@ CONDITIONS = (
     "gemini_ajustado",
     "claude_prompt",
 )
+# Condiciones adicionales: cualquier proveedor con el prompt básico y la demo histórica de Gemini.
+EXTRA_CONDITIONS = ("remoto_basico", "gemini_openrouter_demo")
 
 
 # Neutraliza texto que una hoja de cálculo podría interpretar como fórmula.
@@ -52,6 +54,9 @@ def summarize(rows):
     # Devuelve conteos y métricas disponibles; no convierte medidas desconocidas en cero.
     return {
         "casos": n,
+        # Modelo y ruta realmente usados: el nombre de la condición no basta para saberlo.
+        "modelos": sorted({r["model"] for r in rows if r.get("model")}),
+        "rutas": sorted({r["ruta"] for r in rows if r.get("ruta")}),
         **{
             key: sum(bool(r["valoracion"][key]) for r in rows)
             for key in (
@@ -95,7 +100,7 @@ def main():
     records = []
     report = {}
     # Procesa cada condición por separado para no mezclar sus casos y métricas.
-    for cond in CONDITIONS + ("gemini_openrouter_demo",):
+    for cond in CONDITIONS + EXTRA_CONDITIONS:
         # Ruta concreta de lectura/escritura; el código utiliza Path para gestionar carpetas y archivos.
         path = folder / f"{cond}.jsonl"
         # Registros de la partición o lote actual, conservados como una lista de diccionarios.
@@ -167,24 +172,36 @@ def main():
         "",
         "Muestra sintética de 30 casos por condición. Sin reparación ni reintentos correctores.",
         "",
-        "| Condición | Casos | JSON | Categoría | Prioridad | Ambas | Mediana s | Coste USD |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|",
+        "| Condición | Modelo · ruta | Casos | JSON | Categoría | Prioridad | Ambas | Mediana s | Coste USD |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
-    # Procesa cada condición por separado para no mezclar sus casos y métricas.
-    for cond in CONDITIONS:
+    # Procesa cada condición por separado; las adicionales solo aparecen si tienen resultados.
+    for cond in CONDITIONS + EXTRA_CONDITIONS:
         # Recupera las estadísticas que se van a presentar en una fila de Markdown.
         r = report[cond]
         # Muestra pendiente y No disponible cuando no hay ejecución, y pasa a la siguiente condición.
         if not r["casos"]:
-            lines.append(f"| {cond} | Pendiente | - | - | - | - | - | No disponible |")
+            if cond in CONDITIONS:
+                lines.append(
+                    f"| {cond} | - | Pendiente | - | - | - | - | - | No disponible |"
+                )
             continue
+        # Modelo y ruta usados, para que la tabla diga qué se comparó de verdad.
+        used = (
+            " · ".join(
+                part
+                for part in (", ".join(r["modelos"]), ", ".join(r["rutas"]))
+                if part
+            )
+            or "-"
+        )
         # Función auxiliar de presentación: muestra desconocidos como No disponible en la tabla.
         fmt = lambda k: str(r[k]) if r[k] is not None else "No disponible"
         # Construye la fila visible con conteos, mediana y coste disponible de la condición.
         lines.append(
             "| "
             + " | ".join(
-                [cond, str(r["casos"])]
+                [cond, used, str(r["casos"])]
                 + [
                     fmt(k)
                     for k in (
@@ -202,16 +219,9 @@ def main():
     # Añade el límite docente: Gemini/OpenRouter no sustituye el par Google base/ajustado.
     lines += [
         "",
-        "Las filas sin ejecución permanecen pendientes. Gemini por OpenRouter es una condición adicional;",
-        "no sustituye la pareja Google base/ajustado.",
+        "Las filas sin ejecución permanecen pendientes. remoto_basico y gemini_openrouter_demo",
+        "son condiciones adicionales; no sustituyen la pareja Google base/ajustado.",
     ]
-    # Incluye por separado la condición adicional solo si tiene resultados medidos.
-    if report["gemini_openrouter_demo"]["casos"]:
-        lines += [
-            "",
-            "Resultado adicional Gemini por OpenRouter: "
-            + json.dumps(report["gemini_openrouter_demo"], ensure_ascii=False),
-        ]
     # Escribe el contenido legible en disco para conservar configuración o resultados de este paso.
     # Muestra el resultado/estado de este paso en la terminal; las claves no se añaden al informe.
     (output / "comparacion.md").write_text("\n".join(lines) + "\n")

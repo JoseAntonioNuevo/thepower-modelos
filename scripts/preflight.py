@@ -2,7 +2,7 @@
 # Comprueba datos, hashes, dependencias y presencia del adaptador antes de clase.
 # Informa si hay configuración, pero nunca imprime claves ni hace inferencia.
 # Sin --local no consulta servidores; con --local solo lee el catálogo de modelos.
-# Un preflight correcto no demuestra que Google, OpenRouter o el entrenamiento funcionen.
+# Un preflight correcto no demuestra que un proveedor remoto o el entrenamiento funcionen.
 
 # Hace visible la raíz del proyecto al ejecutar un archivo desde scripts/.
 import _bootstrap  # noqa: F401
@@ -18,7 +18,7 @@ import argparse, importlib.util, json, os, platform
 from curso.common import ROOT, validate_splits, assert_frozen
 
 # Reutiliza funciones del núcleo compartido para mantener el mismo protocolo entre scripts.
-from curso.remote import load_config
+from curso.remote import load_config, configured_provider, configured_model
 
 # Reutiliza funciones del núcleo compartido para mantener el mismo protocolo entre scripts.
 from curso.http import bounded_json, model_ids
@@ -43,6 +43,7 @@ def main():
             m: importlib.util.find_spec(m) is not None
             for m in (
                 "requests",
+                "anthropic",
                 "transformers",
                 "torch",
                 "trl",
@@ -51,7 +52,22 @@ def main():
                 "google.genai",
             )
         },
-        "openrouter_configurado": bool(os.getenv("OPENROUTER_API_KEY")),
+        # Ruta de LLM_PROVIDER/LLM_MODEL que usarán demo y evaluación remota sin --proveedor.
+        "ruta_remota": {
+            "proveedor": configured_provider(),
+            "modelo": configured_model(),
+        },
+        # Presencia de credenciales por proveedor: solo booleanos, nunca valores.
+        "credenciales": {
+            name: bool(os.getenv(var))
+            for name, var in (
+                ("anthropic", "ANTHROPIC_API_KEY"),
+                ("openai", "OPENAI_API_KEY"),
+                ("openrouter", "OPENROUTER_API_KEY"),
+                ("gemini", "GEMINI_API_KEY"),
+                ("compatible", "COMPAT_BASE_URL"),
+            )
+        },
         "google_proyecto_curso_configurado": bool(os.getenv("GOOGLE_CLOUD_PROJECT")),
         "adaptador_local": (
             ROOT / "modelos/lora-soporte/adapter_model.safetensors"

@@ -2,7 +2,7 @@
 # Pruebas de límites de respuestas y preservación de la evidencia.
 # Mocks simulan proveedores; una prueba usa gzip servido en loopback.
 # Se comprueban redirects, tamaño descomprimido, JSON, CSV y cierre de recursos.
-# Ninguna prueba llama a Google u OpenRouter ni imprime una clave real.
+# Ninguna prueba llama a un proveedor remoto ni imprime una clave real.
 
 # Escribe/lee tablas CSV con comillas y separadores correctos.
 import csv
@@ -455,6 +455,8 @@ class OutputSecurity(unittest.TestCase):
                         "evaluar",
                         "--condicion",
                         "claude_prompt",
+                        "--proveedor",
+                        "anthropic",
                         "--modelo",
                         "demo",
                         "--split",
@@ -463,8 +465,10 @@ class OutputSecurity(unittest.TestCase):
                         str(path),
                     ],
                 ),
+                # Clave ficticia: la comprobación previa de credenciales no llega a la red.
+                patch.dict("os.environ", {"ANTHROPIC_API_KEY": "dummy"}),
                 patch(
-                    "evaluar_remotos.chat_openrouter",
+                    "evaluar_remotos.chat",
                     return_value={
                         "respuesta_original": raw,
                         "latencia_s": 1,

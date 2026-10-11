@@ -8,7 +8,8 @@
     "Diversidad limitada; no es un ranking universal",
     "Gemini Google base y ajustado pendientes",
     "Coste local de hardware/energia no medido",
-    "Dependencias públicas actualizadas por seguridad; estas cifras pertenecen al entorno anterior, no a una ejecución nueva."
+    "Dependencias públicas actualizadas por seguridad; estas cifras pertenecen al entorno anterior, no a una ejecución nueva.",
+    "claude_prompt se midió con anthropic/claude-haiku-4.5 por OpenRouter (servido por Amazon Bedrock); la ruta actual del curso es claude-haiku-5-5 por la API de Anthropic y necesita su propia ejecución."
   ],
   "resultados": {
     "qwen_base": {
