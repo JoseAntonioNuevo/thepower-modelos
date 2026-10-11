@@ -5,6 +5,9 @@ producir categoría, prioridad y una respuesta breve. Los comentarios están en
 español junto a las funciones y operaciones. En los notebooks hay explicación
 previa a cada etapa y comentarios dentro de las celdas.
 
+Esta guía es el orden de lectura. Para tareas concretas («¿cómo entreno?»,
+«¿cómo uso otro proveedor?») consulta [preguntas-frecuentes.md](preguntas-frecuentes.md).
+
 ## Orden de lectura
 
 1. **Un ejemplo:** `datos/train.jsonl`. Cada línea es un objeto con `id`,
@@ -30,10 +33,12 @@ previa a cada etapa y comentarios dentro de las celdas.
    `adapter_model.safetensors` (matrices aprendidas), `adapter_config.json`
    (cómo aplicarlas), archivos del tokenizer y `entrenamiento.json` (receta y
    métricas). Son salidas del entrenamiento y no se distribuyen en Git.
-9. **Consulta:** `scripts/demo.py`. Usa un caso de desarrollo con base,
-   few-shot o adaptador. La inferencia no ejecuta un optimizador.
-10. **Evaluación:** `scripts/evaluar_qwen.py` y `scripts/resumir.py`. Conservan
-    originales y errores, calculan aciertos y generan informes. Pérdida por
+9. **Consulta:** `scripts/demo.py`. Usa un caso de desarrollo con Qwen base,
+   few-shot o adaptador (`--proveedor qwen`), o con la ruta remota de `.env` /
+   `--proveedor`. La inferencia no ejecuta un optimizador.
+10. **Evaluación:** `scripts/evaluar_qwen.py`, `scripts/evaluar_remotos.py` y
+    `scripts/resumir.py`. Conservan originales y errores, calculan aciertos y
+    generan informes que indican modelo y ruta de cada condición. Pérdida por
     token y acierto de categoría/prioridad son medidas distintas.
 11. **Interfaz:** `scripts/servir_comparacion.py`. Una base expone dos alias a
     isbetter.ai y serializa la generación. `/health` identifica el adaptador;
@@ -41,7 +46,9 @@ previa a cada etapa y comentarios dentro de las celdas.
 12. **Hub:** `scripts/descargar_modelo.py` descarga la revisión fijada;
     `scripts/publicar_adaptador.py` crea un repo privado nuevo y verifica recarga
     del adaptador por commit. La segunda acción sí escribe en el servicio remoto.
-13. **S8:** `curso/remote.py`, `scripts/convertir_gemini.py`,
+13. **S8:** `curso/remote.py` (`route` lee `LLM_PROVIDER`/`LLM_MODEL` de `.env` y
+    `chat` llama al adaptador de Anthropic, OpenAI, OpenRouter, API compatible,
+    Gemini, LM Studio o Google Cloud), `scripts/convertir_gemini.py`,
     `scripts/gemini_tuning.py` y `scripts/evaluar_remotos.py`. Distinguen
     conversión local, inferencia, subida de datos y entrenamiento gestionado.
 
@@ -51,8 +58,9 @@ previa a cada etapa y comentarios dentro de las celdas.
   particiones/prompts. `assert_frozen` lo contrasta sin actualizarlo.
 - `prompts/fewshot-ids.json`: cuatro registros de train usados como contexto.
   Few-shot no modifica pesos. El entrenamiento y la base/LoRA usan el prompt básico.
-- `.env.example`: nombres de configuración y valores públicos de referencia.
-  La copia local `.env` queda fuera de Git y no se muestra como material docente.
+- `.env.example`: ruta remota (`LLM_PROVIDER`, `LLM_MODEL`, tarifa y ajustes),
+  claves por proveedor, modelo local y Google Cloud. La copia local `.env` queda
+  fuera de Git y no se muestra como material docente.
 - `requirements.in` y `requirements-training.in`: propósito de cada librería.
   Los `.lock` son archivos generados con versiones y hashes para la instalación.
 - `scripts/_bootstrap.py`: hace visible la raíz para importar `curso` desde scripts.
@@ -60,8 +68,10 @@ previa a cada etapa y comentarios dentro de las celdas.
 - `curso/http.py`: limita bytes, profundidad y forma del JSON recibido por HTTP.
   `stream=True` aquí controla lectura del cuerpo; no equivale al streaming SSE
   con el que el navegador muestra fragmentos de generación.
-- `tests/`: contratos de datos, HTTP y evidencia. Mocks sustituyen proveedores;
-  las pruebas HTTP locales no acreditan calidad del modelo ni llamadas reales.
+- `tests/`: contratos de datos, HTTP y evidencia. `test_proveedores.py` comprueba
+  la elección de ruta y la petición de cada proveedor con el SDK y la red
+  simulados. Mocks sustituyen proveedores; las pruebas no acreditan calidad del
+  modelo ni llamadas reales.
 - `.github/workflows/checks.yml`: sintaxis, contratos y preflight en CI sin pesos.
 
 ## Cómo leer las expresiones repetidas

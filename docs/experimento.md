@@ -20,12 +20,44 @@ ni ajustar después de leer test. Una variante requiere su propio experimento.
 
 ## Condiciones
 
+S7, el mismo Qwen3-0.6B en local:
+
 1. Qwen original con instrucciones básicas.
 2. El mismo Qwen con cuatro ejemplos de train en cada consulta.
 3. El mismo Qwen con LoRA y las instrucciones básicas.
 
 LoRA: dos épocas, r=8, alpha=16, dropout=0.05 y configuración fija.
 Comparar con Qwen3.5-4B cambiaría también el modelo.
+
+S8 añade, con los mismos datos, test y validador:
+
+4. Gemini base (`gemini-3.1-flash-lite`) en Google Cloud con instrucciones básicas.
+5. Gemini ajustado en Google Cloud con train y validación, mismas instrucciones.
+6. Claude con instrucciones básicas y los mismos cuatro ejemplos few-shot. Ruta del
+   curso: Claude Haiku 5.5 (`claude-haiku-5-5`) por la API de Anthropic.
+
+Condiciones adicionales, que no sustituyen a ninguna de las seis:
+`remoto_basico` (cualquier ruta del `.env` con instrucciones básicas) y
+`gemini_openrouter_demo` (Gemini por OpenRouter, demo histórica).
+
+## Rutas remotas
+
+Todas las rutas reciben el mismo `prompts/basico.txt`, los mismos ejemplos
+cuando hay few-shot y un máximo de 180 tokens de salida. Sin reintentos: un fallo
+de API queda como error en el denominador. Cada proveedor tiene parámetros
+propios y el registro los conserva:
+
+- Claude Haiku 5.5: instrucciones en `system`, `thinking` desactivado y sin
+  `temperature`, que este modelo solo admite en su valor predeterminado; por eso
+  sus respuestas no son deterministas.
+- Gemini (Gemini API y Google Cloud): `systemInstruction`, temperatura 0 y
+  `thinkingLevel` MINIMAL, iguales para base y ajustado.
+- Chat Completions (OpenAI, OpenRouter y APIs compatibles): mensaje `system`;
+  temperatura 0 salvo en OpenAI, cuyos modelos de razonamiento la rechazan.
+
+Los ajustes de `LLM_TEMPERATURE` y `LLM_EXTRA_BODY` cambian el experimento y se
+declaran con los resultados. Cada registro guarda ruta, modelo devuelto,
+proveedor que respondió, motivo de parada, tokens, latencia y coste con su método.
 
 ## Métricas
 

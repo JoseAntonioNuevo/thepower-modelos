@@ -3,20 +3,60 @@
 Este es el repositorio docente de S7/S8 de AI Engineer. Python 3.12, datos
 sintéticos y un caso común: convertir una incidencia ficticia en JSON con
 `categoria`, `prioridad` y `respuesta`. Comparamos el mismo Qwen3-0.6B con
-instrucciones básicas, few-shot y un adaptador LoRA; S8 añade rutas remotas.
+instrucciones básicas, few-shot y un adaptador LoRA; S8 añade modelos por API de
+cualquier proveedor elegido en `.env` (en clase, Claude Haiku 5.5 por la API de
+Anthropic) y el ajuste gestionado de Gemini en Google Cloud.
 Es independiente de `1-langGraph`, `kanban` y otros proyectos del curso.
 
 Sigue la petición del alumno y la jerarquía de instrucciones de tu plataforma.
 Estas indicaciones aportan el mapa del proyecto, sus contratos y comprobaciones.
 `CLAUDE.md` es un enlace relativo a este archivo, no una copia independiente.
 
+## Contexto de las clases
+
+| | S7 · Modelos abiertos | S8 · Modelos cerrados y APIs |
+|---|---|---|
+| Pregunta | ¿Qué modelo puedo usar para mi tarea, cómo lo pongo en marcha y cómo compruebo si responde bien? | ¿Cómo conecto mi aplicación a estos modelos y qué pruebas necesito para elegir el que mejor resuelve mi tarea? |
+| Recorrido | equipo → elección del modelo → Hugging Face → ejecución local → comparación → prompting → adaptación → evaluación | proveedor y modelo → petición API → respuesta y consumo → comparación por tareas → adaptación gestionada → decisión |
+| En el repo | Qwen3-0.6B con revisión fija, few-shot, entrenamiento LoRA, recarga, evaluación, API local para isbetter.ai y ruta de LM Studio | `curso/remote.py` con proveedores intercambiables, evaluación remota con el mismo test, conversión de datos y ajuste de Gemini |
+| Fuera del repo | Demostraciones de clase con LM Studio y Hugging Face | Comparación en clase de un dossier, código y un plan en isbetter.ai; laboratorio de Google Cloud |
+
+Conceptos que los alumnos preguntan a menudo: modelo, pesos, formato y runtime;
+abierto frente a cerrado frente a remoto; memoria y cuantización; prompting,
+few-shot y fine-tuning; qué guarda un adaptador; tokens, coste y motivo de
+parada; por qué se evalúa con casos separados y sin reparar respuestas.
+El [README](README.md) los resume; las tareas concretas están en
+[docs/preguntas-frecuentes.md](docs/preguntas-frecuentes.md).
+
+## Cómo responder a un alumno
+
+El alumno suele preguntar «¿cómo hago…?», «¿qué hace esto?» o «¿por qué falla?».
+Responde de forma sencilla y comprobable:
+
+1. Empieza con la respuesta en una o dos frases, sin jerga; si usas un término
+   técnico (token, adaptador, endpoint), defínelo en la misma frase.
+2. Da el comando exacto, listo para copiar desde la raíz del repo.
+3. Señala dónde está en el código (`archivo:función`) y, si ayuda, un fragmento
+   corto del código real.
+4. Di qué debería ver y cómo comprobarlo; si algo puede costar dinero, subir datos
+   o tardar, avísalo antes.
+5. Propón el siguiente paso o la pregunta natural que viene después.
+
+Usa como base `docs/preguntas-frecuentes.md` y el código actual; si discrepan, el
+código manda y lo señalas. No inventes salidas de modelos ni resultados: separa lo
+que has ejecutado de las cifras de referencia fechadas. Para una clave que falta,
+indica la variable de `.env` que debe rellenar el alumno; nunca pidas ni muestres
+claves.
+
 ## Cómo localizar la respuesta a una duda
 
 1. Confirma la raíz de la copia abierta y su estado con `git status --short --branch`.
    Las rutas de esta guía son relativas a esa raíz; no uses rutas del Mac del profesor.
-2. Lee `README.md` para instalación/recorrido y `docs/guia-codigo.md` para el índice
-   de archivos. Después abre la función y sus llamadas relacionadas con la pregunta.
-   Para el protocolo consulta `docs/experimento.md`; para la entrega, `docs/ejercicio.md`.
+2. Para «¿cómo hago…?» empieza por `docs/preguntas-frecuentes.md`. Lee `README.md`
+   para el contexto de las clases y los recorridos, y `docs/guia-codigo.md` para el
+   orden de lectura. Después abre la función y sus llamadas relacionadas.
+   Para el protocolo consulta `docs/experimento.md`; para la entrega,
+   `docs/ejercicio.md` (S7 y S8); para proveedores, `docs/modelos-remotos.md`.
 3. Busca primero el archivo o símbolo exacto del mapa siguiente. `git ls-files`
    enumera el contenido público; `rg -n 'nombre_de_funcion' curso scripts tests`
    localiza referencias. Si no hay rg, usa `git grep -n 'nombre_de_funcion'`.
@@ -27,6 +67,8 @@ Estas indicaciones aportan el mapa del proyecto, sus contratos y comprobaciones.
 
 | Duda del alumno | Archivos y símbolos que debes inspeccionar |
 |---|---|
+| Sobre qué va S7 o S8 y qué hay en el repo | `README.md`, sección «Contexto de las clases» de este archivo |
+| Cómo se hace una tarea concreta | `docs/preguntas-frecuentes.md` y el script que cite |
 | Qué instalar y cómo arrancar | `README.md`, `requirements.in`, `requirements-training.in`, sus `.lock`, `.env.example`, `scripts/preflight.py:main` |
 | Dónde están los ejemplos y qué campos tienen | `datos/train.jsonl`, `datos/validacion.jsonl`, `datos/test.jsonl`, `datos/desarrollo.jsonl`; `scripts/preparar_datos.py:TRAIN`, `target`, `main` |
 | Por qué separar train, validación y test | `docs/experimento.md`, `curso/common.py:validate_splits`, `assert_frozen` |
@@ -42,9 +84,13 @@ Estas indicaciones aportan el mapa del proyecto, sus contratos y comprobaciones.
 | Cómo calcular y leer resultados | `scripts/resumir.py:summarize`, `main`; `docs/resultados-referencia.json` |
 | Cómo conectar isbetter.ai | `README.md`, `scripts/servir_comparacion.py:ComparisonEngine`, `ComparisonServer`, `ComparisonHandler`, `validate_request` |
 | Cómo funcionan cola, lock, streaming y HTTP | `scripts/servir_comparacion.py:events`, `do_POST`; `tests/test_comparison_server.py` |
-| LM Studio/OpenRouter/Google y diferencias de petición | `curso/remote.py:chat_local`, `chat_openrouter`, `chat_google`; `docs/modelos-remotos.md` |
+| Cómo elegir proveedor y modelo remoto en `.env` | `curso/remote.py:route`, `route_settings`, `require_credentials`, `chat`; `.env.example`; `docs/modelos-remotos.md` |
+| Diferencias de petición entre proveedores | `curso/remote.py:chat_anthropic`, `chat_completions` (`chat_openai`, `chat_openrouter`, `chat_compatible`), `chat_gemini`, `chat_local`, `chat_google`; `tests/test_proveedores.py` |
 | Cómo convertir los datos para Gemini | `scripts/convertir_gemini.py`, `curso/remote.py:gemini_record`, `datos/gemini/ids.json` |
 | Cómo preparar o ejecutar tuning Google | `scripts/gemini_tuning.py:job_spec`, `main`; `curso/remote.py:google_client`; `notebooks/S8-Gemini-Claude.ipynb` |
+| Cómo evaluar modelos remotos y las seis condiciones | `scripts/evaluar_remotos.py:main`, `FIXED_ROUTES`; `scripts/resumir.py:CONDITIONS`, `EXTRA_CONDITIONS`; `docs/ejercicio.md` |
+| Cómo se calcula el coste | `curso/remote.py:tariff_cost`, `chat_completions`; `LLM_PRECIO_*` en `.env.example` |
+| Qué hay que entregar | `docs/ejercicio.md` |
 | Cómo publicar un adaptador en Hugging Face | `scripts/publicar_adaptador.py:main`, `docs/modelos-remotos.md` |
 | Límites HTTP, JSON y CSV | `SECURITY.md`, `curso/http.py`, `scripts/resumir.py:csv_text`, `tests/test_output_security.py` |
 | Importaciones, tests y CI | `scripts/_bootstrap.py`, `tests/`, `.github/workflows/checks.yml`, `docs/publicacion.md` |
@@ -101,8 +147,13 @@ Estas indicaciones aportan el mapa del proyecto, sus contratos y comprobaciones.
   de la respuesta. `None`/`null` en consumo significa desconocido, no cero.
 - `docs/resultados-referencia.json` corresponde a una ejecución anterior con
   versiones identificadas. No atribuyas sus cifras al entorno nuevo ni prometas
-  esos tiempos/aciertos al alumno. Google base/ajustado y OpenRouter son rutas
-  distintas; una llamada OpenRouter no demuestra tuning en Google Cloud.
+  esos tiempos/aciertos al alumno. Su condición `claude_prompt` se midió con
+  Claude Haiku 4.5 por OpenRouter; la ruta actual del curso es Claude Haiku 5.5
+  por la API de Anthropic. Google base/ajustado y cualquier otra ruta a Gemini son
+  distintas; una llamada de inferencia no demuestra tuning en Google Cloud.
+- El proveedor remoto se elige en `.env` (`LLM_PROVIDER`, `LLM_MODEL`) o con
+  `--proveedor`/`--modelo`. El alumno puede usar el que tenga; registra ruta y
+  modelo y no presentes otro modelo como si fuera el de la condición del curso.
 
 ## Una copia nueva del alumno
 
@@ -134,7 +185,7 @@ sin secretos. Pide solo la información que falte; inspecciona lo disponible.
 | No hay GPU o laboratorio para completar la ejecución | Consulta las modalidades de `docs/ejercicio.md`. Ayuda a preparar código/datos/configuración y deja las métricas no obtenidas pendientes; no contrates recursos ni inventes entrenamiento para completar la entrega. |
 | Respuesta inválida o LoRA no mejora | Reglas, salida original, `validate_answer` y métricas separadas. Un error es resultado del experimento; no repares ni ajustes con test. |
 | isbetter no conecta | Servidor propio en 1235 frente a LM Studio en 1234, URL `/v1`, catálogo y `/health`, Host/Origin y permiso del navegador. No desactives controles ni abras el servidor a la red. |
-| Google/OpenRouter devuelve error | Ruta/ID, presencia de configuración (sin imprimir claves), cuenta/proyecto, estado HTTP, permisos/cuota y documentación vigente. No crees otro job, cambies proveedor o amplíes gasto para ocultarlo. |
+| Un proveedor remoto devuelve error | `python scripts/preflight.py` (ruta y credenciales, sin claves), ID del modelo en esa ruta, estado HTTP, permisos/cuota/saldo y documentación vigente. Un 400 suele ser un parámetro no admitido: revisa `LLM_TEMPERATURE`/`LLM_EXTRA_BODY`. No crees otro job, cambies proveedor o amplíes gasto para ocultarlo. |
 
 La API propia escucha en `127.0.0.1`, publica `qwen-original` y
 `qwen-lora-soporte` y permite CORS para `https://isbetter.ai`. Ambas condiciones
