@@ -164,8 +164,11 @@ Necesitas proyecto identificado, permisos, facturación/presupuesto, bucket,
 cuota y acceso al modelo. Configura .env.example y autentica tu cuenta con
 Google. No tomar un proyecto personal por defecto como laboratorio.
 
-La receta usa europe-west4 para tuning y eu para serving. Verifica soporte,
-regiones y tarifas actuales. Estima tokens, épocas, almacenamiento e inferencia.
+La receta usa europe-west4 para tuning y eu para serving. `eu` es una
+multirregión: el código la consulta en `aiplatform.eu.rep.googleapis.com`. El
+modelo ajustado se consulta en la región que figura en su recurso
+(`projects/…/locations/europe-west4/…`). Verifica soporte, regiones y tarifas
+actuales. Estima tokens, épocas, almacenamiento e inferencia.
 El presupuesto del script es una comprobación previa, no un tope de Google.
 
 Solo con recursos/gasto preparados usa `subir-datos` y `crear`, indicando

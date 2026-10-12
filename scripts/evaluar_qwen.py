@@ -10,9 +10,6 @@ import _bootstrap  # noqa: F401
 # Permite leer opciones de la terminal y generar ayuda del comando.
 import argparse
 
-# Convierte entre texto JSON y diccionarios/listas Python, manteniendo respuestas como evidencia.
-import json
-
 # Mide duración y prepara fechas; perf_counter/monotonic sirven para intervalos, no fechas del calendario.
 import time
 
@@ -27,26 +24,40 @@ from curso.common import ROOT, assert_frozen, read_jsonl, validate_answer, write
 def main():
     # Parser de argumentos: describe las opciones que admite este comando.
     p = argparse.ArgumentParser()
-    # Opción de terminal '--condicion': el parser aplica tipo, valores permitidos y obligatoriedad definidos aquí.
+    # --condicion: qwen_base (prompt básico), qwen_fewshot (más cuatro ejemplos) o qwen_lora (base + LoRA).
     p.add_argument(
         "--condicion", choices=("qwen_base", "qwen_fewshot", "qwen_lora"), required=True
     )
-    # Opción de terminal '--split': el parser aplica tipo, valores permitidos y obligatoriedad definidos aquí.
+    # --split: partición evaluada; desarrollo para ensayar y test solo para la medida final.
     p.add_argument(
         "--split", choices=("desarrollo", "validacion", "test"), default="desarrollo"
     )
-    # Opción de terminal '--adaptador': el parser aplica tipo, valores permitidos y obligatoriedad definidos aquí.
+    # --adaptador: carpeta del adaptador LoRA entrenado; solo se usa con qwen_lora.
     p.add_argument("--adaptador", default=str(ROOT / "modelos/lora-soporte"))
-    # Opción de terminal '--salida': el parser aplica tipo, valores permitidos y obligatoriedad definidos aquí.
+    # --salida: archivo JSONL nuevo donde se guardan los resultados (obligatorio).
     p.add_argument("--salida", required=True)
-    # Argumentos de la terminal convertidos a atributos como args.salida o args.modelo.
-    # Manifiesto verificado que acompaña los resultados y conserva el protocolo exacto.
+    # Argumentos de la terminal convertidos a atributos como args.condicion o args.salida.
     args = p.parse_args()
+    # Manifiesto verificado que acompaña los resultados y conserva el protocolo exacto.
     frozen = assert_frozen()
-    # Comprueba presencia de archivo/carpeta antes de leerla o escribir; conserva la evidencia anterior.
+    # Nunca sobrescribe: un resultado anterior es evidencia que se conserva.
     if Path(args.salida).exists():
-        raise ValueError("Salida existe; elige otra para conservar evidencia")
-    # Reutiliza funciones del núcleo compartido para mantener el mismo protocolo entre scripts.
+        # Termina con un mensaje de uso antes de cargar el modelo.
+        p.error(
+            f"--salida {args.salida} ya existe; elige otro archivo y conserva el anterior"
+        )
+    # qwen_lora necesita un adaptador entrenado: sin sus archivos se detiene antes de cargar Qwen.
+    adapter_ready = all(
+        (Path(args.adaptador) / name).exists()
+        for name in ("adapter_config.json", "adapter_model.safetensors")
+    )
+    # Solo qwen_lora necesita el adaptador; base y few-shot usan la base sola.
+    if args.condicion == "qwen_lora" and not adapter_ready:
+        # Termina con un mensaje que indica cómo crear el adaptador.
+        p.error(
+            f"No hay adaptador en {args.adaptador}; entrénalo con scripts/entrenar_lora.py"
+        )
+    # Importa Qwen tras validar los argumentos: un error de opciones no espera a cargar torch.
     from curso.qwen import load_qwen, generate
 
     # Carga el adaptador solo para qwen_lora; las otras dos condiciones mantienen la base original.
@@ -57,8 +68,9 @@ def main():
     results = []
     # Recorre cada registro de la partición elegida; conserva el ID para relacionar entradas y resultados.
     for row in read_jsonl(ROOT / f"datos/{args.split}.jsonl"):
+        # try/except: un fallo en un caso se registra y el lote continúa con el siguiente.
         try:
-            # Destino donde esta ejecución guardará sus archivos.
+            # Respuesta original, tokens, tiempo y parámetros de esta generación.
             output = generate(
                 model,
                 tokenizer,
@@ -68,36 +80,48 @@ def main():
             )
             # Tipo de fallo del caso; None indica que la petición/generación terminó sin esa excepción.
             error = None
+        # Exception captura cualquier error del caso (memoria, tokenizer…); Ctrl+C sí detiene el lote.
         except Exception as exc:
-            # Destino donde esta ejecución guardará sus archivos.
-            # Tipo de fallo del caso; None indica que la petición/generación terminó sin esa excepción.
+            # Cualquier fallo queda registrado sin respuesta, tiempo ni coste inventados.
             output = {"respuesta_original": None, "latencia_s": None, "coste_usd": None}
+            # Nombre de la excepción (por ejemplo, RuntimeError); el caso sigue en el denominador.
             error = type(exc).__name__
         # Conserva un resultado por caso incluso si hubo excepción; el objetivo permite calcular aciertos.
         results.append(
             {
+                # ID del caso de la partición.
                 "id": row["id"],
+                # Condición evaluada (qwen_base, qwen_fewshot o qwen_lora).
                 "condicion": args.condicion,
+                # Partición de donde sale el caso.
                 "split": args.split,
+                # Texto enviado al modelo.
                 "incidencia": row["incidencia"],
+                # Respuesta anotada con la que se compara.
                 "objetivo": row["objetivo"],
+                # Fecha y hora UTC del caso.
                 "fecha": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                # Manifiesto congelado: identifica datos, prompt y modelo usados.
                 "experimento": frozen,
+                # Carpeta del adaptador, solo en qwen_lora.
                 "adaptador": args.adaptador if args.condicion == "qwen_lora" else None,
+                # Campos devueltos por generate (respuesta, tokens, latencia…) o los vacíos del error.
                 **output,
+                # Nombre de la excepción o None.
                 "error": error,
+                # Banderas del validador; un error cuenta como respuesta inválida.
                 "valoracion": validate_answer(
                     output.get("respuesta_original"), row["objetivo"]
                 ),
             }
         )
-        # Guarda los registros del paso como JSONL, una fila por ejemplo y sin reparar respuestas.
+        # Reescribe el JSONL tras cada caso: si el proceso se corta, lo completado queda guardado.
         write_jsonl(args.salida, results)
-        # Muestra el resultado/estado de este paso en la terminal; las claves no se añaden al informe.
+        # Progreso en la terminal: ID, condición y error (None si fue bien).
         print(row["id"], args.condicion, "error=" + str(error), flush=True)
 
 
 # Punto de entrada: ejecutar como script llama main; importar el módulo solo define sus funciones.
-# Invoca el punto de entrada únicamente cuando se ejecuta este archivo como programa.
 if __name__ == "__main__":
+    # Invoca el punto de entrada únicamente cuando se ejecuta este archivo como programa.
     main()

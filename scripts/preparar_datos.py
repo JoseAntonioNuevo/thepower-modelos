@@ -16,8 +16,8 @@ import json
 # Reutiliza funciones del núcleo compartido para mantener el mismo protocolo entre scripts.
 from curso.common import ROOT, write_jsonl, validate_splits, experiment_manifest
 
-# Texto, categoría, prioridad; el propósito y las etiquetas se fijan antes del test.
-# Situaciones iniciales de train, agrupadas por categoría, con prioridad anotada antes del test.
+# Situaciones iniciales de train agrupadas por categoría (la clave del diccionario).
+# Cada entrada es (texto, prioridad); las etiquetas se fijaron antes de mirar el test.
 TRAIN = {
     "acceso": [
         ("No puedo iniciar sesión con mi cuenta del curso.", "media"),
@@ -87,6 +87,7 @@ TRAIN = {
     ],
 }
 # Casos distintos para comprobar pérdida; no se usan en los pasos del optimizador.
+# Cada entrada es (texto, categoría, prioridad); lo mismo en TEST.
 VALIDATION = [
     (
         "El inicio de sesión me devuelve credenciales incorrectas y no puedo entrar.",
@@ -309,7 +310,8 @@ TEST = [
 # Devuelve categoría, prioridad y una respuesta genérica fija para cada categoría.
 # Es la anotación docente de un caso ficticio, no la salida de un modelo.
 def target(cat, priority):
-    # Respuesta HTTP que se inspeccionará y cerrará después de leerla.
+    # Respuesta genérica fija por categoría: pide el dato que falta, no resuelve el caso.
+    # [cat] al final del diccionario elige la de esta categoría.
     response = {
         "acceso": "Indica el error de acceso y el paso en que aparece, sin compartir tu contraseña.",
         "facturacion": "Indica el concepto y la fecha del pago para revisar la incidencia de facturación.",
@@ -332,7 +334,7 @@ def main():
         "Necesito orientación: ",
         "Buenas, mi situación es esta: ",
     )
-    # Registros de la partición o lote actual, conservados como una lista de diccionarios.
+    # Registros de train que se van generando; len(rows) da el número del siguiente ID.
     rows = []
     # Recorre categorías y situaciones iniciales que ya tienen etiquetas fijadas.
     for cat, seeds in TRAIN.items():
@@ -351,9 +353,10 @@ def main():
                         "objetivo": target(cat, priority),
                     }
                 )
-    # Guarda los registros del paso como JSONL, una fila por ejemplo y sin reparar respuestas.
+    # Escribe los 240 registros de train.
     write_jsonl(ROOT / "datos/train.jsonl", rows)
-    # Construye validación y test con sus propios casos; las familias usan prefijos distintos de train.
+    # Validación y test: un registro por caso, sin prefijos; cada caso es su propia familia
+    # (validacion-00, test-00…), de modo que ninguna familia se comparte con train.
     for name, seeds in (("validacion", VALIDATION), ("test", TEST)):
         # Guarda los registros del paso como JSONL, una fila por ejemplo y sin reparar respuestas.
         write_jsonl(
@@ -368,12 +371,14 @@ def main():
                 for i, (text, cat, priority) in enumerate(seeds)
             ],
         )
-    # Selección fija, solo del entrenamiento; se congela antes de usar test.
-    # Escribe el contenido legible en disco para conservar configuración o resultados de este paso.
+    # Few-shot: el primer registro de cada categoría de train (acceso, facturación, técnico
+    # y consulta), fijado antes de usar test.
     (ROOT / "prompts/fewshot-ids.json").write_text(
-        json.dumps(["TR-001", "TR-061", "TR-121", "TR-181"])
+        json.dumps(["TR-001", "TR-061", "TR-121", "TR-181"]),
+        encoding="utf-8",
+        newline="\n",
     )
-    # Guarda los registros del paso como JSONL, una fila por ejemplo y sin reparar respuestas.
+    # desarrollo.jsonl: seis consultas para demostraciones; no pertenecen a train, validación ni test.
     write_jsonl(
         ROOT / "datos/desarrollo.jsonl",
         [
@@ -411,15 +416,17 @@ def main():
     )
     # Crea la carpeta necesaria; parents/exist_ok controlan subcarpetas y rutas ya existentes.
     (ROOT / "config").mkdir(exist_ok=True)
-    # Escribe el contenido legible en disco para conservar configuración o resultados de este paso.
+    # Manifiesto congelado: modelo, revisión, generación y hashes de los archivos recién escritos.
     (ROOT / "config/experimento-congelado.json").write_text(
-        json.dumps(experiment_manifest(), ensure_ascii=False, indent=2) + "\n"
+        json.dumps(experiment_manifest(), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+        newline="\n",
     )
-    # Muestra el resultado/estado de este paso en la terminal; las claves no se añaden al informe.
+    # Valida las particiones recién escritas y muestra sus cantidades.
     print(json.dumps(validate_splits()))
 
 
 # Punto de entrada: ejecutar como script llama main; importar el módulo solo define sus funciones.
-# Invoca el punto de entrada únicamente cuando se ejecuta este archivo como programa.
 if __name__ == "__main__":
+    # Invoca el punto de entrada únicamente cuando se ejecuta este archivo como programa.
     main()

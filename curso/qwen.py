@@ -7,17 +7,10 @@
 
 """Inferencia y tokenización con el mismo template, sin llamadas al importar."""
 
-# Convierte entre texto JSON y diccionarios/listas Python, manteniendo respuestas como evidencia.
-import json
-
-# Lee configuración del entorno y ajusta opciones del proceso.
-import os
-
 # Mide duración y prepara fechas; perf_counter/monotonic sirven para intervalos, no fechas del calendario.
 import time
 
-# Path permite construir rutas, comprobar archivos y leer/escribir sin concatenar separadores a mano.
-from pathlib import Path
+# Modelo, revisión, parámetros de generación y constructor de mensajes compartidos.
 from .common import MODEL_ID, REVISION, GENERATION, messages
 
 
@@ -39,12 +32,14 @@ def load_qwen(adapter=None):
         if torch.backends.mps.is_available()
         else "cpu"
     )
-    # FP32 en MPS facilita entrenamiento reproducible de este modelo pequeño.
-    # Carga vocabulario y plantilla de la misma revisión del modelo, sin ejecutar código del repositorio.
+    # Carga vocabulario y plantilla de chat de la misma revisión; token=False no usa cuenta de
+    # Hugging Face y trust_remote_code=False impide ejecutar código descargado del repositorio.
     tokenizer = AutoTokenizer.from_pretrained(
         MODEL_ID, revision=REVISION, token=False, trust_remote_code=False
     )
-    # Carga los pesos Safetensors: FP32 en MPS, dtype del checkpoint en otros dispositivos, y los mueve al equipo.
+    # Carga los pesos Safetensors y los mueve al dispositivo con .to(device).
+    # FP32 en MPS hace más estable y reproducible el entrenamiento de este modelo pequeño;
+    # en CUDA/CPU se usa el dtype del checkpoint. "eager" es la atención estándar de PyTorch.
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_ID,
         revision=REVISION,
@@ -63,6 +58,7 @@ def load_qwen(adapter=None):
         model = PeftModel.from_pretrained(model, adapter)
     # Activa modo evaluación para desactivar dropout; SFTTrainer activará modo entrenamiento cuando corresponda.
     model.eval()
+    # Tupla con los tres objetos: quien llama los desempaqueta con model, tokenizer, device = ...
     return model, tokenizer, device
 
 
@@ -85,37 +81,50 @@ def generate(model, tokenizer, device, incident, fewshot=False):
     # Motor de tensores y gradientes; durante inferencia se desactivan los gradientes.
     import torch
 
-    # Texto formateado o decodificado que se pasa al siguiente paso del recorrido.
+    # Mensajes system/user (y few-shot si se pide) convertidos en un único texto con la plantilla de Qwen.
     text = render(tokenizer, messages(incident, fewshot))
     # Convierte el prompt en tensores y los mueve al mismo dispositivo que los pesos.
     inputs = tokenizer(text, return_tensors="pt", add_special_tokens=False).to(device)
     # Espera a las operaciones MPS pendientes para que la medida temporal tenga límites definidos.
     if device == "mps":
+        # synchronize() bloquea hasta que la GPU del Mac termina el trabajo pendiente.
         torch.mps.synchronize()
     # Inicio de la medida temporal; el tiempo de carga de pesos se mide por separado cuando corresponde.
     start = time.perf_counter()
     # Desactiva el seguimiento de gradientes: consultar el modelo no lo entrena.
     with torch.inference_mode():
         # Predice tokens nuevos con generación greedy y límite de 180 tokens fijados en GENERATION.
+        # pad_token_id indica qué token usar como relleno; aquí, el de fin de texto.
         output = model.generate(
             **inputs, **GENERATION, pad_token_id=tokenizer.eos_token_id
         )
     # Espera a las operaciones MPS pendientes para que la medida temporal tenga límites definidos.
     if device == "mps":
+        # Así la latencia incluye la generación completa en la GPU, no solo su encolado.
         torch.mps.synchronize()
-    # Separa la respuesta generada de los tokens de entrada que también aparecen en output.
+    # output repite el prompt antes de la respuesta: [0, n:] toma la única fila desde el token n,
+    # donde n es la longitud del prompt.
     tokens = output[0, inputs["input_ids"].shape[1] :]
     # Decodifica la salida y devuelve consumo/tiempo; coste local sigue desconocido porque no medimos energía/hardware.
     return {
+        # Texto decodificado tal como lo generó el modelo, sin reparar.
         "respuesta_original": tokenizer.decode(tokens, skip_special_tokens=True),
+        # Segundos de generación, sin contar la carga del modelo.
         "latencia_s": time.perf_counter() - start,
+        # Tokens del prompt (system, few-shot si lo hay e incidencia).
         "tokens_entrada": inputs["input_ids"].shape[1],
+        # Tokens nuevos generados por el modelo.
         "tokens_salida": len(tokens),
+        # None = coste desconocido; ejecutar en local no significa coste cero.
         "coste_usd": None,
         "coste_metodo": "Sin tarifa API; hardware/energía no medidos",
+        # cuda, mps o cpu: el dispositivo donde se generó.
         "hardware": device,
+        # Identidad exacta del modelo y la revisión usados.
         "model": MODEL_ID,
         "revision": REVISION,
+        # Parámetros de generación aplicados (greedy y límite de 180 tokens).
         "parametros": GENERATION,
+        # La plantilla se aplicó sin razonamiento (thinking).
         "enable_thinking": False,
     }

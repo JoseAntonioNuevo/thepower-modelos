@@ -13,39 +13,42 @@ import json
 # Reutiliza funciones del núcleo compartido para mantener el mismo protocolo entre scripts.
 from curso.common import ROOT, read_jsonl, write_jsonl, assert_frozen, digest
 
-# Reutiliza funciones del núcleo compartido para mantener el mismo protocolo entre scripts.
+# Convierte una fila S7 al formato systemInstruction + contents de Gemini.
 from curso.remote import gemini_record
 
 
 # Escribe el JSONL convertido de cada partición y su correspondencia de IDs.
 def main():
-    # Comprueba integridad antes de convertir e inicia la correspondencia de IDs.
+    # Comprueba integridad antes de convertir.
     assert_frozen()
+    # Por partición: IDs en el orden de las líneas convertidas y hash del archivo.
     mapping = {}
     # Convierte cada partición por separado; ninguna línea de test entra en train.
     for split in ("train", "validacion", "test"):
-        # Registros de la partición o lote actual, conservados como una lista de diccionarios.
+        # Filas originales de la partición, en el mismo orden que tendrá el archivo convertido.
         rows = read_jsonl(ROOT / f"datos/{split}.jsonl")
-        # Ruta concreta de lectura/escritura; el código utiliza Path para gestionar carpetas y archivos.
+        # Archivo de salida en datos/gemini/, uno por partición.
         path = ROOT / f"datos/gemini/{split}.jsonl"
-        # Guarda los registros del paso como JSONL, una fila por ejemplo y sin reparar respuestas.
+        # Escribe un registro Gemini por fila y reemplaza la conversión anterior de esa partición.
         write_jsonl(path, [gemini_record(row) for row in rows])
         # Relaciona orden de líneas con IDs originales y calcula el hash del archivo convertido.
         mapping[split] = {
             "ids_por_linea": [r["id"] for r in rows],
             "sha256": digest(path),
         }
-    # Escribe el contenido legible en disco para conservar configuración o resultados de este paso.
+    # ids.json relaciona cada línea con su ID original y guarda el hash de cada archivo.
     (ROOT / "datos/gemini/ids.json").write_text(
-        json.dumps(mapping, ensure_ascii=False, indent=2) + "\n"
+        json.dumps(mapping, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+        newline="\n",
     )
-    # Muestra el resultado/estado de este paso en la terminal; las claves no se añaden al informe.
+    # Aviso en la terminal: la conversión es local y no sube nada a Google.
     print(
         "JSONL convertido; test separado de los archivos de entrenamiento y validación"
     )
 
 
 # Punto de entrada: ejecutar como script llama main; importar el módulo solo define sus funciones.
-# Invoca el punto de entrada únicamente cuando se ejecuta este archivo como programa.
 if __name__ == "__main__":
+    # Invoca el punto de entrada únicamente cuando se ejecuta este archivo como programa.
     main()

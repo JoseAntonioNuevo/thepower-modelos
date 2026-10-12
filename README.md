@@ -270,7 +270,8 @@ python scripts/resumir.py --carpeta resultados/ensayo \
 ```
 
 El informe incluye JSON, CSV y una tabla Markdown. Se conservan las respuestas
-originales, sin reparar ni reintentar: un JSON inválido cuenta como error.
+originales, sin reparar ni reintentar: un JSON inválido cuenta como fallo y
+sigue en el denominador.
 JSON válido, esquema, categoría, prioridad y ambas etiquetas se miden por
 separado. Los runners rechazan archivos existentes. [Protocolo](docs/experimento.md).
 

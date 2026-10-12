@@ -55,44 +55,53 @@ ALLOWED_ORIGIN = "https://isbetter.ai"
 # Valida el cuerpo recibido de isbetter y devuelve nombre de modelo y mensajes.
 # Impide cambiar parámetros que romperían la comparación del experimento.
 def validate_request(body):
-    # Validación previa: Selecciona qwen-original o qwen-lora-soporte.
+    # Solo se sirven los dos alias de la comparación.
     if not isinstance(body, dict) or body.get("model") not in MODEL_IDS:
+        # Error 400: modelo desconocido para esta demo.
         raise ValueError("Selecciona qwen-original o qwen-lora-soporte")
     # Extrae mensajes del cuerpo HTTP; se validarán roles, longitud y contenido.
     messages = body.get("messages")
-    # Validación previa: messages debe contener entre 1 y 24 mensajes.
+    # Entre 1 y 24 mensajes: limita el tamaño de la conversación que llega al modelo.
     if not isinstance(messages, list) or not 1 <= len(messages) <= 24:
+        # Error 400: lista ausente, vacía o demasiado larga.
         raise ValueError("messages debe contener entre 1 y 24 mensajes")
     # Valida cada mensaje antes de enviarlo a la plantilla/tokenizer del modelo.
     for message in messages:
-        # Validación previa: Rol de mensaje no admitido.
+        # Solo roles de chat estándar: system, user o assistant.
         if not isinstance(message, dict) or message.get("role") not in (
             "system",
             "user",
             "assistant",
         ):
+            # Error 400: rol desconocido o mensaje que no es un objeto.
             raise ValueError("Rol de mensaje no admitido")
-        # Validación previa: Solo se admiten mensajes de texto no vacíos.
+        # content debe ser texto con algún carácter visible; no se admiten imágenes ni listas.
         if (
             not isinstance(message.get("content"), str)
             or not message["content"].strip()
         ):
+            # Error 400: contenido vacío o que no es texto.
             raise ValueError("Solo se admiten mensajes de texto no vacíos")
-    # Validación previa: El último mensaje debe ser del usuario.
+    # El modelo responde al último turno, que debe ser del usuario.
     if messages[-1]["role"] != "user":
+        # Error 400: no hay ninguna pregunta del usuario que responder.
         raise ValueError("El último mensaje debe ser del usuario")
-    # Validación previa: La comparación fija temperature=0 y max_tokens=180.
+    # Se aceptan ausentes o con el valor del experimento; otro valor cambiaría la comparación.
     if body.get("temperature") not in (None, 0) or body.get("max_tokens") not in (
         None,
         GENERATION["max_new_tokens"],
     ):
+        # Error 400: parámetros distintos de los del experimento.
         raise ValueError("La comparación fija temperature=0 y max_tokens=180")
-    # Validación previa: JSON como texto, sin tools ni formato impuesto.
+    # Sin herramientas, sin JSON mode y una sola respuesta (n=1), como en el protocolo.
     if body.get("tools") or body.get("response_format") or body.get("n", 1) != 1:
+        # Error 400: herramientas, formato impuesto o varias respuestas.
         raise ValueError("JSON como texto, sin tools ni formato impuesto")
-    # Validación previa: stream debe ser booleano.
+    # stream decide si la respuesta llega por fragmentos (SSE) o completa.
     if not isinstance(body.get("stream", False), bool):
+        # Error 400: stream con un valor que no es true/false.
         raise ValueError("stream debe ser booleano")
+    # Alias del modelo y mensajes ya validados.
     return body["model"], messages
 
 
@@ -105,16 +114,20 @@ class ComparisonEngine:
         # Resuelve la ruta del adaptador elegido para este servidor.
         adapter = Path(adapter).resolve()
         # Lee la configuración PEFT para comprobar compatibilidad con la base del experimento.
-        config = json.loads((adapter / "adapter_config.json").read_text())
-        # Validación previa: El adaptador debe pertenecer al mismo Qwen y no modificar bias.
+        config = json.loads(
+            (adapter / "adapter_config.json").read_text(encoding="utf-8")
+        )
+        # El adaptador debe haberse entrenado sobre el mismo Qwen y sin tocar los bias:
+        # así, desactivarlo devuelve exactamente la base original.
         if (
             config["base_model_name_or_path"] != MODEL_ID
             or config.get("bias") != "none"
         ):
+            # Detiene el arranque del servidor con un mensaje claro.
             raise ValueError(
                 "El adaptador debe pertenecer al mismo Qwen y no modificar bias"
             )
-        # Reutiliza funciones del núcleo compartido para mantener el mismo protocolo entre scripts.
+        # Misma función de carga que usan demo.py y evaluar_qwen.py.
         from curso.qwen import load_qwen
 
         # Carga una única base con LoRA que ambas condiciones compartirán bajo el lock.
@@ -123,12 +136,17 @@ class ComparisonEngine:
         self.lock = threading.Lock()
         # Identifica modelo/revisión/hash del adaptador en /health para relacionar una respuesta con sus pesos.
         self.metadata = {
+            # Modelo base y revisión exactos.
             "base_model": MODEL_ID,
             "revision": REVISION,
+            # Huella (SHA-256) de los pesos del adaptador cargado.
             "adapter_sha256": digest(adapter / "adapter_model.safetensors"),
+            # Dispositivo donde se ejecuta (cuda, mps o cpu).
             "device": self.device,
+            # Parámetros de generación del experimento.
             "generation": GENERATION,
             "enable_thinking": False,
+            # Recordatorio: las peticiones se atienden de una en una.
             "inference": "serializada; ambas opciones comparten el mismo modelo",
         }
 
@@ -138,14 +156,14 @@ class ComparisonEngine:
         # Motor de tensores y gradientes; durante inferencia se desactivan los gradientes.
         import torch
 
-        # Carga modelos/tokenizers y aporta generación y utilidades de entrenamiento.
+        # TextIteratorStreamer entrega texto mientras se genera; StoppingCriteria permite cortar la generación.
         from transformers import (
             TextIteratorStreamer,
             StoppingCriteria,
             StoppingCriteriaList,
         )
 
-        # Reutiliza funciones del núcleo compartido para mantener el mismo protocolo entre scripts.
+        # Misma plantilla de chat que en entrenamiento e inferencia.
         from curso.qwen import render
 
         # Señal compartida para pedir al worker que deje de generar cuando termina o se cierra el consumidor.
@@ -155,13 +173,13 @@ class ComparisonEngine:
         class Cancelled(StoppingCriteria):
             # Comprueba la señal de cancelación entre pasos de generación y permite detener el worker.
             def __call__(self, input_ids, scores, **kwargs):
+                # True detiene la generación en el siguiente token; False la deja continuar.
                 return cancelled.is_set()
 
-        # Incluye generación y restauración del adaptador: las peticiones de la
-        # batalla llegan a la vez, pero nunca cambian el adaptador de otra petición.
-        # Serializa desde el formateo hasta la restauración del estado PEFT, también durante streaming.
+        # Serializa desde el formateo hasta la restauración del estado PEFT, también durante streaming:
+        # isbetter envía las dos peticiones a la vez, pero una nunca cambia el adaptador de la otra.
         with self.lock:
-            # Texto formateado o decodificado que se pasa al siguiente paso del recorrido.
+            # Mensajes recibidos convertidos en texto con la plantilla de Qwen.
             text = render(self.tokenizer, messages)
             # Tokeniza el contexto completo y mueve sus tensores al dispositivo del modelo.
             inputs = self.tokenizer(
@@ -169,8 +187,9 @@ class ComparisonEngine:
             ).to(self.device)
             # Número de tokens de entrada, separado de los tokens nuevos de respuesta.
             prompt_tokens = inputs["input_ids"].shape[1]
-            # Validación previa: La consulta supera el contexto de 4096 tokens de esta demo.
+            # Prompt más respuesta máxima no pueden superar el contexto de 4096 tokens de esta demo.
             if prompt_tokens + GENERATION["max_new_tokens"] > 4096:
+                # Detiene la petición con un error 400 antes de generar.
                 raise ValueError(
                     "La consulta supera el contexto de 4096 tokens de esta demo"
                 )
@@ -183,6 +202,7 @@ class ComparisonEngine:
 
             # Worker de inferencia: selecciona original/LoRA, genera y comunica tokens o excepción al consumidor.
             def generate():
+                # try/except: cualquier fallo de generación se guarda para el hilo que responde.
                 try:
                     # Original desactiva temporalmente LoRA; la otra condición conserva el adaptador cargado.
                     context = (
@@ -192,7 +212,7 @@ class ComparisonEngine:
                     )
                     # El contexto restaura el estado del adaptador al salir y no se calculan gradientes durante inferencia.
                     with context, torch.inference_mode():
-                        # Destino donde esta ejecución guardará sus archivos.
+                        # Genera con los parámetros congelados; el streamer recibe el texto según se produce.
                         output = self.model.generate(
                             **inputs,
                             **GENERATION,
@@ -202,6 +222,7 @@ class ComparisonEngine:
                         )
                     # Conserva solo tokens nuevos, separándolos del prompt, para calcular el consumo final.
                     completed.append(output[0, prompt_tokens:])
+                # Cualquier error (memoria, dispositivo…) se captura aquí.
                 except Exception as exc:
                     # Propaga la excepción del worker al hilo que responde HTTP.
                     errors.append(exc)
@@ -212,6 +233,7 @@ class ComparisonEngine:
             worker = threading.Thread(target=generate, daemon=True)
             # Arranca generación en segundo plano; el hilo actual puede enviar fragmentos conforme llegan.
             worker.start()
+            # try/finally: aunque el navegador se desconecte, se cancela y se espera al worker.
             try:
                 # Recibe fragmentos de texto conforme el worker de generación los produce.
                 for fragment in streamer:
@@ -222,18 +244,21 @@ class ComparisonEngine:
             finally:
                 # Solicita detener pasos posteriores si el consumidor se cierra o sale del bucle.
                 cancelled.set()
-                # No liberar el lock mientras el hilo todavía cambia el adaptador.
-                # Espera a que el worker termine antes de liberar el lock y permitir otra condición.
+                # Espera a que el worker termine: el lock no se libera mientras el adaptador sigue desactivado.
                 worker.join()
             # Tras esperar al worker, comunica su fallo en lugar de fingir una respuesta correcta.
             if errors:
+                # Relanza el error original del worker en este hilo.
                 raise errors[0]
             # Cantidad de tokens de respuesta utilizados para informar consumo y motivo de parada.
             count = len(completed[0])
+            # Evento final: length si se agotó el límite de 180 tokens, stop si el modelo terminó antes.
             yield {
+                # length = se agotó el límite de tokens; stop = el modelo terminó por sí mismo.
                 "finish_reason": "length"
                 if count >= GENERATION["max_new_tokens"]
                 else "stop",
+                # Tokens de la consulta, con los nombres de la API de OpenAI.
                 "usage": {
                     "prompt_tokens": prompt_tokens,
                     "completion_tokens": count,
@@ -265,6 +290,7 @@ class ComparisonServer(ThreadingHTTPServer):
     def process_request(self, request, client_address):
         # Reserva plaza sin bloquear; rechaza nuevas conexiones cuando ya hay 16 en curso.
         if not self.request_slots.acquire(blocking=False):
+            # try/finally: el socket se cierra aunque falle el envío.
             try:
                 # Limita a un segundo la escritura de la respuesta de saturación.
                 request.settimeout(1)
@@ -275,17 +301,22 @@ class ComparisonServer(ThreadingHTTPServer):
             finally:
                 # Cierra el socket rechazado aunque falle enviar la respuesta.
                 self.shutdown_request(request)
+            # Conexión rechazada: no se crea hilo para ella.
             return
+        # try/except: si crear el hilo falla, la plaza se devuelve.
         try:
             # Delega en ThreadingHTTPServer la creación del hilo para esta conexión.
             super().process_request(request, client_address)
+        # Fallo al crear el hilo de esta conexión.
         except Exception:
             # Devuelve la plaza al semáforo para que una petición posterior pueda utilizarla.
             self.request_slots.release()
+            # Relanza el error original tras liberar la plaza.
             raise
 
     # Atiende la conexión y libera siempre su plaza HTTP cuando termina.
     def process_request_thread(self, request, client_address):
+        # try/finally: la plaza se devuelve aunque el handler falle.
         try:
             # Ejecuta el handler heredado; el finally posterior devuelve la plaza HTTP.
             super().process_request_thread(request, client_address)
@@ -305,12 +336,12 @@ class ComparisonHandler(BaseHTTPRequestHandler):
 
     # Registra método/estado del servidor; no añade prompts ni cuerpos HTTP al log.
     def log_message(self, fmt, *args):
-        # Solo método/estado, nunca prompts, claves ni cuerpos de petición.
-        # Muestra el resultado/estado de este paso en la terminal; las claves no se añaden al informe.
+        # Línea de log de BaseHTTPRequestHandler (método, ruta y estado); nunca prompts ni cuerpos.
         print(fmt % args, flush=True)
 
     # Acepta el origen de isbetter o una petición sin Origin, como curl local.
     def origin_allowed(self):
+        # True si no hay cabecera Origin o si es exactamente https://isbetter.ai.
         return self.headers.get("Origin") in (None, ALLOWED_ORIGIN)
 
     # Comprueba Host de loopback con el puerto correcto además del Origin.
@@ -320,19 +351,25 @@ class ComparisonHandler(BaseHTTPRequestHandler):
         try:
             # Componentes del Host separados para comprobar nombre, puerto y ausencia de credenciales.
             destination = urlsplit("//" + self.headers.get("Host", ""))
-            # Valor local del recorrido actual; su significado concreto depende de la función.
+            # True solo si Host es localhost/127.0.0.1 con el puerto de este servidor y nada más.
             local = (
+                # Nombre de máquina local,
                 destination.hostname in ("localhost", "127.0.0.1")
+                # puerto de este servidor,
                 and destination.port == self.server.server_port
+                # sin usuario ni contraseña en el Host
                 and destination.username is None
                 and destination.password is None
+                # y sin ruta, consulta ni fragmento: solo nombre y puerto.
                 and not destination.path
                 and not destination.query
                 and not destination.fragment
             )
+        # urlsplit lanza ValueError ante un puerto inválido.
         except ValueError:
-            # Valor local del recorrido actual; su significado concreto depende de la función.
+            # Un Host mal formado (por ejemplo, puerto no numérico) se trata como no local.
             local = False
+        # Hace falta Host local y, además, Origin ausente o isbetter.ai.
         return local and self.origin_allowed()
 
     # Añade permisos CORS solo para el origen autorizado; otros no reciben esa cabecera.
@@ -352,7 +389,7 @@ class ComparisonHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         # Añade permisos del navegador solo si corresponde al origen validado.
         self.cors_headers()
-        # Describe si el cuerpo es JSON completo o un flujo de eventos SSE.
+        # El cuerpo es un JSON completo en UTF-8.
         self.send_header("Content-Type", "application/json; charset=utf-8")
         # Declara la cantidad exacta de bytes de la respuesta JSON completa.
         self.send_header("Content-Length", str(len(data)))
@@ -369,6 +406,7 @@ class ComparisonHandler(BaseHTTPRequestHandler):
         if not self.request_allowed():
             # Rechaza el origen/destino con un error controlado y sin iniciar inferencia.
             self.send_json(403, {"error": {"message": "Origen no admitido"}})
+            # Fin de la respuesta: no se procesa nada más.
             return
         # Envía el código HTTP antes de las cabeceras y del cuerpo.
         self.send_response(204)
@@ -389,22 +427,27 @@ class ComparisonHandler(BaseHTTPRequestHandler):
         if not self.request_allowed():
             # Rechaza el origen/destino con un error controlado y sin iniciar inferencia.
             self.send_json(403, {"error": {"message": "Origen no admitido"}})
+            # Fin de la respuesta: no se procesa nada más.
             return
         # Extrae la ruta HTTP sin mezclar query string con la selección de endpoint.
         path = urlsplit(self.path).path
         # Endpoint de descubrimiento: devuelve los dos alias de una base y su estado de adaptador.
         if path == "/v1/models":
-            # Devuelve catálogo/estado o texto completo y consumo con su estructura compatible.
+            # Catálogo con el formato de /v1/models de la API de OpenAI.
             self.send_json(
                 200,
                 {
+                    # Formato de lista de la API de OpenAI.
                     "object": "list",
                     "data": [
                         {
+                            # Alias que elige isbetter.ai.
                             "id": name,
                             "object": "model",
                             "owned_by": "Qwen",
+                            # Ambos alias comparten la misma base.
                             "base_model": MODEL_ID,
+                            # True solo para qwen-lora-soporte.
                             "adapter_enabled": name == MODEL_IDS[1],
                         }
                         for name in MODEL_IDS
@@ -413,7 +456,7 @@ class ComparisonHandler(BaseHTTPRequestHandler):
             )
         # Endpoint de identidad: revisión, hash del adaptador y configuración realmente cargada.
         elif path == "/health":
-            # Devuelve catálogo/estado o texto completo y consumo con su estructura compatible.
+            # Estado listo y metadatos del motor: revisión, hash del adaptador, dispositivo…
             self.send_json(
                 200,
                 {"status": "ready", "models": MODEL_IDS, **self.server.engine.metadata},
@@ -429,11 +472,13 @@ class ComparisonHandler(BaseHTTPRequestHandler):
         if not self.request_allowed():
             # Rechaza el origen/destino con un error controlado y sin iniciar inferencia.
             self.send_json(403, {"error": {"message": "Origen no admitido"}})
+            # Fin de la respuesta: no se procesa nada más.
             return
         # Solo admite generación en /v1/chat/completions.
         if urlsplit(self.path).path != "/v1/chat/completions":
             # Devuelve ruta desconocida; no ejecuta ningún comportamiento alternativo.
             self.send_json(404, {"error": {"message": "Ruta no encontrada"}})
+            # Fin de la respuesta: no se procesa nada más.
             return
         # Marca si ya se enviaron cabeceras de streaming; después solo puede notificarse el error dentro del flujo.
         started = False
@@ -441,11 +486,13 @@ class ComparisonHandler(BaseHTTPRequestHandler):
         events = None
         # Indica si esta petición reservó una plaza de inferencia, para liberarla exactamente una vez.
         acquired = False
+        # try/except/finally: cualquier error se responde y siempre se liberan los recursos.
         try:
             # Cantidad de bytes declarada para el cuerpo; se valida antes de leerlo.
             length = int(self.headers.get("Content-Length", "0"))
-            # Validación previa: Tamaño de petición no admitido.
+            # Cuerpo vacío o mayor de 64 KiB: se rechaza antes de leerlo.
             if not 0 < length <= 65536:
+                # Error 400 antes de leer el cuerpo.
                 raise ValueError("Tamaño de petición no admitido")
             # Lee el cuerpo dentro del límite de 64 KiB y lo convierte a un objeto Python.
             body = json.loads(self.rfile.read(length))
@@ -464,26 +511,29 @@ class ComparisonHandler(BaseHTTPRequestHandler):
                         }
                     },
                 )
+                # Fin de la respuesta: no se reservó plaza ni se generó nada.
                 return
             # Metadatos compatibles de la respuesta HTTP: identificador, fecha y alias del modelo.
             identity = {
+                # Identificador único de esta respuesta (formato de OpenAI).
                 "id": "chatcmpl-" + uuid.uuid4().hex,
+                # Momento de creación en segundos desde 1970 (marca de tiempo Unix).
                 "created": int(time.time()),
+                # Alias del modelo pedido.
                 "model": model_id,
             }
             # Generador del motor: produce texto y un último evento con consumo y motivo de parada.
             events = self.server.engine.events(model_id, messages)
             # El cliente decide entre recibir eventos progresivos o una respuesta JSON al terminar.
             if body.get("stream", False):
-                # Obtener el primer fragmento antes de responder 200 permite
-                # devolver un error real de inferencia si falla al comenzar.
-                # Intenta comenzar la generación antes de enviar HTTP 200 para poder comunicar un fallo inicial con su estado real.
+                # Pide el primer fragmento antes de enviar HTTP 200: si la generación falla al
+                # comenzar, aún se puede responder con el código de error real.
                 first = next(events)
                 # Envía el código HTTP antes de las cabeceras y del cuerpo.
                 self.send_response(200)
                 # Añade permisos del navegador solo si corresponde al origen validado.
                 self.cors_headers()
-                # Describe si el cuerpo es JSON completo o un flujo de eventos SSE.
+                # text/event-stream: el cuerpo es un flujo de eventos SSE.
                 self.send_header("Content-Type", "text/event-stream; charset=utf-8")
                 # Evita que las respuestas de la demo se almacenen en caché HTTP.
                 self.send_header("Cache-Control", "no-store")
@@ -498,12 +548,17 @@ class ComparisonHandler(BaseHTTPRequestHandler):
                     delta = {"content": event["content"]} if "content" in event else {}
                     # Añade metadatos compatibles y el motivo de parada a cada chunk.
                     data = {
+                        # Mismo id, fecha y modelo en todos los fragmentos de esta respuesta.
                         **identity,
+                        # Tipo de objeto de un fragmento en la API de OpenAI.
                         "object": "chat.completion.chunk",
                         "choices": [
                             {
+                                # Primera (y única) alternativa.
                                 "index": 0,
+                                # Texto nuevo de este fragmento.
                                 "delta": delta,
+                                # None hasta el último evento, que trae stop o length.
                                 "finish_reason": event.get("finish_reason"),
                             }
                         ],
@@ -543,27 +598,34 @@ class ComparisonHandler(BaseHTTPRequestHandler):
                     else:
                         # Guarda el evento final que identifica motivo de parada y tokens.
                         last = event
-                # Devuelve catálogo/estado o texto completo y consumo con su estructura compatible.
+                # Respuesta completa con el formato chat.completion de la API de OpenAI.
                 self.send_json(
                     200,
                     {
                         **identity,
+                        # Tipo de objeto de una respuesta completa.
                         "object": "chat.completion",
                         "choices": [
                             {
                                 "index": 0,
+                                # Mensaje del asistente con el texto completo.
                                 "message": {
                                     "role": "assistant",
                                     "content": "".join(parts),
                                 },
+                                # Motivo de parada del evento final.
                                 "finish_reason": last["finish_reason"],
                             }
                         ],
+                        # Tokens de entrada y salida.
                         "usage": last["usage"],
                     },
                 )
+        # El navegador cerró la conexión: ya no hay a quién responder.
         except (BrokenPipeError, ConnectionResetError):
+            # pass no hace nada; el finally de abajo libera los recursos.
             pass
+        # Cualquier otro error de validación o de generación.
         except Exception as exc:
             # Tras iniciar SSE, comunica el error dentro del flujo; ya no puede cambiar el estado HTTP.
             if started:
@@ -596,37 +658,43 @@ class ComparisonHandler(BaseHTTPRequestHandler):
 def main():
     # Parser de argumentos: describe las opciones que admite este comando.
     parser = argparse.ArgumentParser(description=__doc__)
-    # Opción de terminal '--port': el parser aplica tipo, valores permitidos y obligatoriedad definidos aquí.
+    # --port: puerto local; 1235 por defecto para no chocar con LM Studio (1234).
     parser.add_argument("--port", type=int, default=1235)
-    # Opción de terminal '--adaptador': el parser aplica tipo, valores permitidos y obligatoriedad definidos aquí.
+    # --adaptador: carpeta del adaptador LoRA entrenado que se servirá como qwen-lora-soporte.
     parser.add_argument("--adaptador", default=str(ROOT / "modelos/lora-soporte"))
-    # Argumentos de la terminal convertidos a atributos como args.salida o args.modelo.
+    # Argumentos de la terminal convertidos a atributos como args.port o args.adaptador.
     args = parser.parse_args()
-    # Muestra el resultado/estado de este paso en la terminal; las claves no se añaden al informe.
+    # Aviso inicial mientras se carga el modelo.
     print("Cargando el mismo Qwen y su adaptador de soporte…", flush=True)
     # Carga modelo y adaptador antes de empezar a escuchar consultas.
     engine = ComparisonEngine(args.adaptador)
     # Escucha solo en IPv4 loopback; no abre la demo en todas las interfaces de red.
     server = ComparisonServer(("127.0.0.1", args.port), engine)
-    # Muestra el resultado/estado de este paso en la terminal; las claves no se añaden al informe.
+    # URL /v1 para configurar isbetter.ai y metadatos del adaptador cargado.
     print(
         json.dumps(
             {
+                # Dirección que se configura en isbetter.ai.
                 "url": f"http://localhost:{args.port}/v1",
+                # Alias disponibles.
                 "models": MODEL_IDS,
+                # Revisión, hash del adaptador, dispositivo…
                 **engine.metadata,
             },
             ensure_ascii=False,
         ),
         flush=True,
     )
+    # try/except/finally: Ctrl+C detiene el bucle y el socket se cierra.
     try:
         # Atiende peticiones hasta que Ctrl+C interrumpe el bucle.
         server.serve_forever()
+    # Ctrl+C es la forma normal de parar el servidor: no se trata como error.
     except KeyboardInterrupt:
+        # pass: salir del bucle es lo esperado.
         pass
     finally:
-        # Cierra el recurso abierto; libera socket/conexión aunque el paso anterior haya fallado.
+        # Cierra el socket del servidor también tras Ctrl+C o un error.
         server.server_close()
 
 

@@ -43,10 +43,11 @@ from curso.common import ROOT, assert_frozen, read_jsonl, basic_prompt
 # Resuelve la ruta del adaptador nuevo y rechaza una salida no vacía.
 # Devuelve la ruta sin borrar ni sobrescribir el entrenamiento anterior.
 def training_output(path):
-    # Destino donde esta ejecución guardará sus archivos.
+    # Ruta absoluta de la carpeta donde se guardará el adaptador.
     output = Path(path).resolve()
-    # Comprueba presencia de archivo/carpeta antes de leerla o escribir; conserva la evidencia anterior.
+    # Acepta una carpeta inexistente o vacía; un archivo o una carpeta con contenido se rechaza.
     if output.exists() and (not output.is_dir() or any(output.iterdir())):
+        # Detiene el script sin tocar la carpeta existente.
         raise ValueError(
             "Salida no vacía; usa otro --salida para conservar el entrenamiento anterior"
         )
@@ -59,30 +60,27 @@ def training_output(path):
 def main():
     # Parser de argumentos: describe las opciones que admite este comando.
     parser = argparse.ArgumentParser()
-    # Opción de terminal '--salida': el parser aplica tipo, valores permitidos y obligatoriedad definidos aquí.
+    # --salida: carpeta nueva o vacía para el adaptador; por defecto modelos/lora-soporte.
     parser.add_argument("--salida", default=str(ROOT / "modelos/lora-soporte"))
-    # Argumentos de la terminal convertidos a atributos como args.salida o args.modelo.
+    # Argumentos de la terminal convertidos a atributos como args.salida.
     args = parser.parse_args()
-    # Destino donde esta ejecución guardará sus archivos.
+    # Comprueba la carpeta de salida antes de cargar nada pesado.
     output = training_output(args.salida)
     # Verifica hashes y protocolo antes de cargar pesos; conserva el manifiesto para el registro.
     frozen = assert_frozen()
-    # Motor de tensores y gradientes; durante inferencia se desactivan los gradientes.
-    import torch
-
     # Dataset guarda los ejemplos preparados en el formato que utiliza el entrenador.
     from datasets import Dataset
 
-    # Añade/recarga adaptadores LoRA manteniendo el modelo base separado.
+    # LoraConfig describe qué capas reciben matrices LoRA y con qué rango.
     from peft import LoraConfig
 
     # SFTConfig configura y SFTTrainer ejecuta el entrenamiento supervisado del modelo.
     from trl import SFTTrainer, SFTConfig
 
-    # Carga modelos/tokenizers y aporta generación y utilidades de entrenamiento.
+    # Utilidad de Transformers para fijar las semillas aleatorias.
     from transformers import set_seed
 
-    # Reutiliza funciones del núcleo compartido para mantener el mismo protocolo entre scripts.
+    # Misma carga de modelo y misma plantilla de chat que en inferencia.
     from curso.qwen import load_qwen, render
 
     # Fija aleatoriedad de Python/NumPy/PyTorch a través de Transformers para repetir la receta.
@@ -97,7 +95,7 @@ def main():
     # labels=-100 excluye el prompt de la pérdida; la respuesta objetivo sí se aprende.
     # Devuelve el Dataset que recibe SFTTrainer para train o validación.
     def dataset(split):
-        # Registros de la partición o lote actual, conservados como una lista de diccionarios.
+        # Ejemplos ya tokenizados de esta partición.
         rows = []
         # Recorre cada registro de la partición elegida; conserva el ID para relacionar entradas y resultados.
         for row in read_jsonl(ROOT / f"datos/{split}.jsonl"):
@@ -118,28 +116,31 @@ def main():
                         "content": json.dumps(row["objetivo"], ensure_ascii=False),
                     }
                 ],
+                # add_generation_prompt=False: la respuesta ya está incluida; no se abre otro turno assistant.
                 False,
             )
             # Comprueba que el contexto es exactamente el prefijo de la conversación con respuesta.
             if not whole.startswith(prompt):
+                # Detiene el entrenamiento: entrenar e inferir con plantillas distintas no sería comparable.
                 raise ValueError("Template entrenamiento/inferencia no coincide")
-            # TRL agrega EOS a los textos que terminan en salto de línea.
-            # Pretokenizar conserva exactamente el template, sin un EOS duplicado.
-            # Tokeniza la conversación completa; la plantilla ya añadió los tokens especiales.
+            # Tokenizamos aquí la conversación completa: TRL añadiría un EOS extra a los textos
+            # que terminan en salto de línea. add_special_tokens=False porque la plantilla ya
+            # incluye los tokens especiales.
             input_ids = tokenizer(whole, add_special_tokens=False)["input_ids"]
             # Tokeniza el contexto para localizar dónde empieza la parte que debe aprender.
             prompt_ids = tokenizer(prompt, add_special_tokens=False)["input_ids"]
             # Verifica que tokenizar la respuesta no ha cambiado los tokens del contexto.
             if input_ids[: len(prompt_ids)] != prompt_ids:
+                # Detiene el entrenamiento: las labels quedarían desalineadas.
                 raise ValueError("Tokenización del prefijo distinta")
             # Rechaza ejemplos largos para evitar truncar silenciosamente una respuesta objetivo.
             if len(input_ids) > 768:
+                # Detiene el entrenamiento en lugar de cortar el ejemplo.
                 raise ValueError(
                     "Ejemplo excede max_length; no truncar respuesta silenciosamente"
                 )
-            # TRL actual requiere labels explícitas al omitir su preparación.
-            # -100 mantiene la pérdida solo sobre la respuesta, nunca el prompt.
-            # Guarda tokens, atención y etiquetas: -100 ignora el prompt en la pérdida; el objetivo conserva sus IDs.
+            # Como saltamos la preparación de TRL, cada fila lleva sus propias labels:
+            # -100 ignora el prompt en la pérdida; la respuesta objetivo conserva sus IDs.
             rows.append(
                 {
                     # Secuencia numérica de toda la conversación: instrucciones, incidencia y respuesta objetivo.
@@ -176,19 +177,17 @@ def main():
             "up_proj",
             "down_proj",
         ],
-        # Dos épocas; batch efectivo 2 × 4 = 8 ejemplos por actualización en un único dispositivo.
-        # Dos recorridos completos por train; validación se mide al final de cada recorrido.
+        # Dos épocas: dos recorridos completos por train; validación se mide al final de cada uno.
         "epochs": 2,
         # Paso inicial del optimizador; la planificación del trainer puede reducirlo conforme avanza.
         "learning_rate": 0.0002,
-        # Dos ejemplos por microbatch; no se cargan los 240 ejemplos simultáneamente en la GPU.
+        # Dos ejemplos por microbatch; no se cargan los 240 ejemplos a la vez en el dispositivo.
         "batch_size": 2,
-        # Suma gradientes de cuatro microbatches antes de aplicar una actualización.
+        # Suma gradientes de cuatro microbatches: batch efectivo 2 × 4 = 8 ejemplos por actualización.
         "gradient_accumulation_steps": 4,
-        # Semilla fija y secuencias de hasta 768 tokens; un exceso se rechaza, no se corta.
-        # Semilla de la receta; fija aleatoriedad, sin garantizar resultados idénticos entre todo hardware/versiones.
+        # Semilla de la receta: repite la aleatoriedad, aunque otro hardware o versión puede dar cifras algo distintas.
         "seed": 42,
-        # Máximo de tokens de contexto más respuesta por ejemplo de entrenamiento.
+        # Máximo de tokens (contexto más respuesta) por ejemplo; un exceso se rechaza, no se corta.
         "max_length": 768,
     }
     # Configura el bucle SFT: batch 2, acumulación 4, validación al final de cada época y AdamW.
@@ -197,15 +196,13 @@ def main():
         output_dir=str(output / "checkpoints"),
         # Entrega al entrenador el número de recorridos fijados en settings.
         num_train_epochs=settings["epochs"],
-        # Microbatch de dos ejemplos; acumula cuatro microbatches antes del paso de optimizador.
-        # Cantidad de ejemplos de train procesados juntos en cada microbatch del dispositivo.
+        # Dos ejemplos de train por microbatch en el dispositivo.
         per_device_train_batch_size=2,
         # Cantidad de ejemplos de validación por microbatch, sin actualizar parámetros.
         per_device_eval_batch_size=2,
         # Cuatro microbatches acumulan gradientes antes de un paso de AdamW.
         gradient_accumulation_steps=4,
-        # Learning rate inicial 2e-4; log cada diez pasos; valida por época y no guarda checkpoints intermedios.
-        # Valor inicial del learning rate; no es una búsqueda de hiperparámetros.
+        # Learning rate inicial 2e-4; valor fijo de la receta, no una búsqueda de hiperparámetros.
         learning_rate=0.0002,
         # Informa métricas cada diez actualizaciones para seguir loss, learning rate y progreso.
         logging_steps=10,
@@ -213,7 +210,6 @@ def main():
         save_strategy="no",
         # Ejecuta validación al terminar cada época; no selecciona automáticamente el mejor checkpoint.
         eval_strategy="epoch",
-        # No mezcla ejemplos en una secuencia; solo puntúa completion y no envía métricas a un servicio de tracking.
         # Longitud máxima del ejemplo tokenizado, distinta del límite de salida de una consulta.
         max_length=768,
         # Cada ejemplo conserva su propia secuencia; no concatena varios ejemplos para llenar el contexto.
@@ -224,8 +220,7 @@ def main():
         report_to="none",
         # Los IDs y labels ya están preparados: TRL no debe volver a formatear ni tokenizar el dataset.
         dataset_kwargs={"skip_prepare_dataset": True},
-        # Sin precisión mixta FP16/BF16 en esta receta; AdamW de PyTorch aplica las actualizaciones.
-        # Desactiva entrenamiento en precisión mixta FP16 para esta receta.
+        # Sin precisión mixta FP16: se entrena con la precisión con que se cargó el modelo.
         fp16=False,
         # Desactiva precisión mixta BF16; en MPS la carga compartida utiliza FP32.
         bf16=False,
@@ -244,7 +239,6 @@ def main():
         processing_class=tokenizer,
         # Entrega la configuración del bucle definida en SFTConfig.
         args=config,
-        # Train es el conjunto que enseña; eval_dataset solo mide y no hace backward/actualizaciones.
         # 240 ejemplos cuyas respuestas aportan pérdida y gradientes para actualizar LoRA.
         train_dataset=dataset("train"),
         # 30 ejemplos que solo miden pérdida; no forman parte de las actualizaciones.
@@ -265,11 +259,11 @@ def main():
             target_modules=settings["target_modules"],
         ),
     )
-    # Inicio de la medida temporal; el tiempo de carga de pesos se mide por separado cuando corresponde.
+    # Inicio de la medida: entrenamiento y guardado; la carga de pesos ya ocurrió antes.
     start = time.perf_counter()
     # Inicia forward → pérdida del siguiente token → backward → actualización del adaptador.
     result = trainer.train()
-    # Guarda matrices/configuración LoRA y archivos del tokenizer para recargar después.
+    # Guarda adapter_model.safetensors y adapter_config.json: solo LoRA, no la base completa.
     trainer.save_model(str(output))
     # Guarda vocabulario/configuración/plantilla del tokenizer junto al adaptador.
     tokenizer.save_pretrained(str(output))
@@ -304,9 +298,9 @@ def main():
     }
     # Escribe el registro legible junto al adaptador, separado del archivo binario de pesos.
     (output / "entrenamiento.json").write_text(
-        json.dumps(receipt, ensure_ascii=False, indent=2) + "\n"
+        json.dumps(receipt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
-    # Muestra el resultado/estado de este paso en la terminal; las claves no se añaden al informe.
+    # Resumen breve en la terminal: carpeta del adaptador, duración y dispositivo.
     print(
         json.dumps(
             {
@@ -319,6 +313,6 @@ def main():
 
 
 # Punto de entrada: ejecutar como script llama main; importar el módulo solo define sus funciones.
-# Invoca el punto de entrada únicamente cuando se ejecuta este archivo como programa.
 if __name__ == "__main__":
+    # Invoca el punto de entrada únicamente cuando se ejecuta este archivo como programa.
     main()

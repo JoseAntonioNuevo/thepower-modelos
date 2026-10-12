@@ -348,8 +348,8 @@ y unas versiones concretos: tu ejecución tendrá sus propias cifras.
 | `… HTTP 402` o `429` | Sin saldo o con límite de uso. No se reintenta automáticamente. |
 | `… HTTP 400` | Un parámetro no admitido por ese modelo. Revisa `LLM_TEMPERATURE` y `LLM_EXTRA_BODY`. |
 | `Salida no vacía; usa otro --salida…` | El entrenador protege un adaptador anterior. Usa otra carpeta. |
-| `Salida existente; conservar resultados` | Los evaluadores no sobrescriben resultados. Usa otro archivo. |
-| `Datos o protocolo cambiaron…` | Se tocaron datos o prompts congelados. Revisa `git diff -- datos prompts config`. |
+| `--salida … ya existe; elige otro archivo…` | `demo.py` y los evaluadores no sobrescriben resultados y lo comprueban antes de consultar ningún modelo. Usa otro archivo. |
+| `Datos o protocolo cambiaron…` | Se tocaron datos o prompts congelados. Revisa `git diff -- datos prompts config`. En Windows, una copia descargada con saltos de línea CRLF también cambia los hashes: `.gitattributes` lo evita en copias nuevas; en una antigua, ejecuta `git add --renormalize .` y vuelve a comprobar. |
 | `adaptador_local: false` | Normal antes de entrenar. |
 | isbetter.ai no conecta | Servidor arrancado, URL acabada en `/v1` (1235 para el comparador, 1234 para LM Studio) y permiso del navegador. |
 | Entrenamiento lento o sin memoria | Comprueba el dispositivo (CUDA, MPS o CPU) y cierra otras aplicaciones. |

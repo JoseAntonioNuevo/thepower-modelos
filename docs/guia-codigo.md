@@ -64,6 +64,8 @@ Esta guía es el orden de lectura. Para tareas concretas («¿cómo entreno?»,
 - `requirements.in` y `requirements-training.in`: propósito de cada librería.
   Los `.lock` son archivos generados con versiones y hashes para la instalación.
 - `scripts/_bootstrap.py`: hace visible la raíz para importar `curso` desde scripts.
+- `.gitattributes`: mantiene saltos de línea LF también en Windows; los hashes
+  del manifiesto se calculan sobre los bytes exactos de datos y prompts.
 - `scripts/preflight.py`: comprueba disponibilidad/integridad sin hacer inferencia.
 - `curso/http.py`: limita bytes, profundidad y forma del JSON recibido por HTTP.
   `stream=True` aquí controla lectura del cuerpo; no equivale al streaming SSE

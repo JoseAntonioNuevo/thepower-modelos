@@ -21,7 +21,11 @@ import time
 
 # Codifica el ID del modelo dentro de una URL y analiza URLs base configuradas en .env.
 from urllib.parse import quote, urlsplit
+
+# Constantes y utilidades compartidas del curso: raíz, límite de salida y constructor de mensajes.
 from .common import ROOT, MAX_NEW_TOKENS, messages
+
+# Lectura acotada y validada de respuestas HTTP (ver curso/http.py).
 from .http import (
     bounded_json,
     objects,
@@ -44,6 +48,7 @@ PROVEEDORES = {
 }
 # Ruta del curso cuando .env no indica otra: Claude Haiku 5.5 por la API de Anthropic.
 PROVEEDOR_POR_DEFECTO = "anthropic"
+# ID del modelo del curso en la API de Anthropic.
 MODELO_POR_DEFECTO = "claude-haiku-5-5"
 # Campos que identifican la petición; LLM_EXTRA_BODY no puede sustituirlos.
 CAMPOS_PROTEGIDOS = {
@@ -55,6 +60,16 @@ CAMPOS_PROTEGIDOS = {
     "stream",
     "input",
     "system_prompt",
+}
+# Variables que habilitan cada ruta: basta con una de cada tupla. LM Studio (local) no
+# necesita ninguna. require_credentials y scripts/preflight.py usan esta misma tabla.
+CREDENCIALES = {
+    "anthropic": ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"),
+    "openai": ("OPENAI_API_KEY",),
+    "openrouter": ("OPENROUTER_API_KEY",),
+    "gemini": ("GEMINI_API_KEY",),
+    "compatible": ("COMPAT_BASE_URL",),
+    "google": ("GOOGLE_CLOUD_PROJECT",),
 }
 
 
@@ -72,6 +87,7 @@ def load_config():
 def configured_provider():
     # Carga las variables necesarias justo antes de decidir la ruta.
     load_config()
+    # Quita espacios y pasa a minúsculas: «Anthropic » y «anthropic» son la misma ruta.
     return (os.getenv("LLM_PROVIDER") or PROVEEDOR_POR_DEFECTO).strip().lower()
 
 
@@ -79,6 +95,7 @@ def configured_provider():
 def configured_model():
     # Proveedor de .env; LLM_MODEL pertenece a esa ruta.
     provider = configured_provider()
+    # Sin LLM_MODEL, otra ruta devuelve None y route() pedirá --modelo.
     return os.getenv("LLM_MODEL") or (
         MODELO_POR_DEFECTO if provider == PROVEEDOR_POR_DEFECTO else None
     )
@@ -93,15 +110,19 @@ def route(provider=None, model=None):
     provider = (provider or configured).strip().lower()
     # Validación previa: rutas desconocidas fallan antes de construir una petición.
     if provider not in PROVEEDORES:
+        # Detiene la ejecución y enumera las rutas válidas.
         raise ValueError(
             f"Proveedor desconocido {provider!r}; usa uno de: {', '.join(PROVEEDORES)}"
         )
     # Completa el modelo desde .env solo cuando la ruta coincide con la configurada.
     if not model and provider == configured:
+        # Toma LLM_MODEL (o el modelo del curso si la ruta es la del curso).
         model = configured_model()
     # Validación previa: salvo LM Studio, que puede descubrirlo, el modelo debe ser explícito.
     if not model and provider != "local":
+        # Detiene la ejecución: sin modelo no se sabe qué consultar.
         raise ValueError(f"Indica el modelo de {provider} con --modelo o LLM_MODEL")
+    # Tupla (proveedor, modelo) lista para chat().
     return provider, model
 
 
@@ -110,17 +131,11 @@ def route(provider=None, model=None):
 def require_credentials(provider):
     # Carga las variables necesarias justo antes de comprobarlas.
     load_config()
-    # Variable que debe existir para cada ruta; local no necesita ninguna.
-    needed = {
-        "anthropic": ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"),
-        "openai": ("OPENAI_API_KEY",),
-        "openrouter": ("OPENROUTER_API_KEY",),
-        "gemini": ("GEMINI_API_KEY",),
-        "compatible": ("COMPAT_BASE_URL",),
-        "google": ("GOOGLE_CLOUD_PROJECT",),
-    }.get(provider, ())
+    # Variables admitidas para esta ruta; una ruta sin entrada (local) no necesita ninguna.
+    needed = CREDENCIALES.get(provider, ())
     # Validación previa: basta con una de las variables admitidas para esa ruta.
     if needed and not any(os.getenv(name) for name in needed):
+        # Mensaje con el nombre de la variable que falta, nunca con valores.
         raise ValueError(f"Falta {needed[0]} para la ruta {provider}")
 
 
@@ -129,24 +144,36 @@ def require_credentials(provider):
 def route_settings(provider):
     # Solo la ruta de LLM_PROVIDER recibe LLM_TEMPERATURE y LLM_EXTRA_BODY.
     if provider != configured_provider():
+        # Ruta distinta de la de .env: valores por defecto del adaptador y ningún campo extra.
         return "defecto", {}
     # Texto de LLM_TEMPERATURE: vacío conserva el valor del adaptador; "omitir" no la envía.
     raw = (os.getenv("LLM_TEMPERATURE") or "").strip().lower()
+    # Variable vacía: se usa la temperatura que fija cada adaptador.
     if not raw:
+        # Valor especial: cada adaptador decide su temperatura.
         temperature = "defecto"
+    # Palabras que piden no enviar temperatura en la petición.
     elif raw in ("omitir", "none", "null"):
+        # None: el campo temperature no se enviará.
         temperature = None
     else:
+        # Cualquier otro texto se convierte en número; por ejemplo, "0.2" pasa a 0.2.
         temperature = float(raw)
     # Campos adicionales en JSON, por ejemplo reasoning_effort o thinkingConfig de un proveedor.
     text = (os.getenv("LLM_EXTRA_BODY") or "").strip()
+    # Texto vacío equivale a no añadir campos; si no, se interpreta como JSON.
     extra = json.loads(text) if text else {}
     # Validación previa: debe ser un objeto JSON y no puede reemplazar modelo ni mensajes.
     if not isinstance(extra, dict):
+        # Detiene la ejecución: una lista o un número no son campos con nombre.
         raise ValueError("LLM_EXTRA_BODY debe ser un objeto JSON")
+    # Intersección de conjuntos: campos de LLM_EXTRA_BODY que intentarían pisar campos protegidos.
     blocked = CAMPOS_PROTEGIDOS & set(extra)
+    # Algún campo protegido aparece en LLM_EXTRA_BODY: se rechaza.
     if blocked:
+        # Detiene la ejecución nombrando los campos no permitidos.
         raise ValueError(f"LLM_EXTRA_BODY no puede cambiar {sorted(blocked)}")
+    # Tupla (temperatura, campos extra) que usa cada adaptador.
     return temperature, extra
 
 
@@ -155,15 +182,21 @@ def route_settings(provider):
 def merged(base, extra):
     # Copia superficial para no modificar el diccionario recibido.
     result = dict(base)
+    # Recorre cada campo de extra junto con su valor.
     for key, value in extra.items():
         # null en LLM_EXTRA_BODY retira un campo que el adaptador enviaría por defecto.
         if value is None:
+            # pop con None como segundo argumento no falla si el campo no existía.
             result.pop(key, None)
         # Si ambos son objetos, combina sus claves en lugar de reemplazar el objeto entero.
         elif isinstance(value, dict) and isinstance(result.get(key), dict):
+            # Llamada recursiva: mezcla el objeto interior con la misma regla.
             result[key] = merged(result[key], value)
+        # Cualquier otro valor sustituye o añade ese campo.
         else:
+            # Asigna el valor de extra a ese campo.
             result[key] = value
+    # Diccionario nuevo con la mezcla; base no se ha modificado.
     return result
 
 
@@ -172,14 +205,17 @@ def merged(base, extra):
 def tariff_cost(provider, model, tokens_in, tokens_out):
     # Tarifas en dólares por millón de tokens, escritas por el usuario en .env.
     price_in = os.getenv("LLM_PRECIO_ENTRADA_USD_MTOK")
+    # Precio de los tokens de salida (la respuesta), normalmente más caro que el de entrada.
     price_out = os.getenv("LLM_PRECIO_SALIDA_USD_MTOK")
     # Solo aplica la tarifa a la ruta y el modelo para los que se declaró.
     same_route = provider == configured_provider() and model == configured_model()
     # Sin tarifa, ruta distinta o tokens desconocidos: el coste queda sin medir.
     if not (price_in and price_out and same_route) or None in (tokens_in, tokens_out):
+        # (None, motivo): coste desconocido, nunca 0.
         return None, "Sin tarifa aplicable en .env; calcular tokens × precio publicado"
     # Importe en dólares: tokens de entrada y de salida por su precio por millón.
     cost = (tokens_in * float(price_in) + tokens_out * float(price_out)) / 1_000_000
+    # (coste en USD, método usado para calcularlo).
     return cost, "tokens × tarifa de .env (LLM_PRECIO_*); verificar el precio vigente"
 
 
@@ -190,23 +226,35 @@ def chat(incident, provider=None, model=None, fewshot=False):
     provider, model = route(provider, model)
     # Cada ruta conserva su propio formato de petición y respuesta.
     if provider == "anthropic":
+        # chat_anthropic arma la petición Messages y devuelve el registro con texto, tokens y coste.
         return chat_anthropic(incident, model, fewshot)
+    # OpenAI por Chat Completions.
     if provider == "openai":
+        # max_completion_tokens y sin temperatura por defecto.
         return chat_openai(incident, model, fewshot)
+    # OpenRouter: un único endpoint para modelos de muchos proveedores.
     if provider == "openrouter":
+        # Pide además el importe (usage.cost) a OpenRouter.
         return chat_openrouter(incident, model, fewshot)
+    # Servidor compatible con Chat Completions (Groq, Ollama, vLLM…).
     if provider == "compatible":
+        # URL y clave salen de COMPAT_BASE_URL y COMPAT_API_KEY.
         return chat_compatible(incident, model, fewshot)
+    # Gemini API con clave de Google AI Studio.
     if provider == "gemini":
+        # Usa el formato generateContent, distinto de Chat Completions.
         return chat_gemini(incident, model, fewshot)
     # LM Studio usa su API nativa salvo con few-shot, que necesita la interfaz compatible.
     if provider == "local":
+        # native=True usa la API propia de LM Studio; few-shot obliga a usar la compatible.
         return chat_local(incident, model, fewshot, native=not fewshot)
     # Vertex AI: base o recurso ajustado del laboratorio; la condición del ejercicio es sin few-shot.
     if fewshot:
+        # Detiene la ejecución: esta condición no admite few-shot.
         raise ValueError(
             "La ruta google del ejercicio usa el prompt básico, sin few-shot"
         )
+    # Única ruta restante: google (Vertex AI).
     return chat_google(incident, model)
 
 
@@ -217,6 +265,7 @@ def chat_anthropic(incident, model, fewshot=False):
     load_config()
     # Validación previa: sin credencial no se construye el cliente.
     if not (os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN")):
+        # Mensaje con el nombre de la variable; nunca su valor.
         raise ValueError("Falta ANTHROPIC_API_KEY")
     # SDK oficial; se importa al llamar para que importar curso.remote no conecte.
     import anthropic
@@ -225,9 +274,13 @@ def chat_anthropic(incident, model, fewshot=False):
     conversation = messages(incident, fewshot)
     # Claude recibe las instrucciones en el campo system, fuera de messages.
     request = {
+        # ID del modelo, por ejemplo claude-haiku-5-5.
         "model": model,
+        # Límite de tokens de la respuesta (180, como en S7).
         "max_tokens": MAX_NEW_TOKENS,
+        # Instrucciones comunes del curso (prompts/basico.txt).
         "system": conversation[0]["content"],
+        # Conversación: few-shot opcional y la incidencia nueva, en turnos user/assistant.
         "messages": conversation[1:],
         # Sin razonamiento extendido: los 180 tokens de salida quedan para la respuesta.
         "thinking": {"type": "disabled"},
@@ -236,27 +289,36 @@ def chat_anthropic(incident, model, fewshot=False):
     temperature, extra = route_settings("anthropic")
     # Haiku 5.5 rechaza temperaturas distintas de la predeterminada: solo se envía si .env la fija.
     if temperature not in ("defecto", None):
+        # Temperatura numérica indicada en LLM_TEMPERATURE.
         request["temperature"] = temperature
     # thinking puede sustituirse o retirarse desde .env; el resto viaja como extra_body.
     if "thinking" in extra:
+        # null en LLM_EXTRA_BODY: no se envía el campo thinking.
         if extra["thinking"] is None:
+            # Retira thinking de la petición.
             request.pop("thinking")
         else:
+            # Usa la configuración de thinking escrita en .env.
             request["thinking"] = extra["thinking"]
+    # El resto de LLM_EXTRA_BODY viaja en extra_body: el SDK lo añade tal cual al JSON enviado.
     extra_body = {k: v for k, v in extra.items() if k != "thinking"}
     # Cliente sin reintentos automáticos y con un tiempo máximo de un minuto.
     client = anthropic.Anthropic(max_retries=0, timeout=60.0)
     # Inicio de la medida temporal alrededor de la llamada completa.
     start = time.perf_counter()
+    # try/except traduce los errores del SDK a mensajes del curso; finally cierra el cliente.
     try:
+        # Llamada real a la API: aquí se envía la petición y se espera la respuesta completa.
         message = client.messages.create(**request, extra_body=extra_body or None)
     # Errores HTTP del servicio: se registra el estado y no se reintenta ni se cambia de modelo.
     except anthropic.APIStatusError as exc:
+        # from None oculta la traza interna del SDK; el mensaje basta para registrar el error.
         raise RuntimeError(
             f"Anthropic HTTP {exc.status_code}; no se reintenta ni cambia el modelo"
         ) from None
     # Fallo de red o tiempo agotado antes de recibir respuesta.
     except anthropic.APIConnectionError:
+        # from None oculta la traza interna del SDK; el caso se registrará como error.
         raise RuntimeError("Anthropic sin respuesta; no se reintenta") from None
     finally:
         # Cierra las conexiones del cliente aunque la llamada haya fallado.
@@ -267,14 +329,21 @@ def chat_anthropic(incident, model, fewshot=False):
     tokens_in, tokens_out = message.usage.input_tokens, message.usage.output_tokens
     # La API no devuelve importe: se calcula con la tarifa declarada en .env, si existe.
     cost, method = tariff_cost("anthropic", model, tokens_in, tokens_out)
+    # Registro común de la consulta: los mismos campos que el resto de rutas.
     return {
+        # Texto tal como llegó, sin reparar.
         "respuesta_original": raw,
+        # Segundos desde el envío hasta recibir la respuesta completa.
         "latencia_s": time.perf_counter() - start,
+        # Tokens que Anthropic contó en la entrada y en la salida.
         "tokens_entrada": tokens_in,
         "tokens_salida": tokens_out,
+        # Coste calculado y cómo se calculó.
         "coste_usd": cost,
         "coste_metodo": method,
+        # Modelo que respondió según la API.
         "model": message.model,
+        # Proveedor y ruta del curso usados.
         "provider": "Anthropic",
         "ruta": "anthropic",
         # request-id de la cabecera HTTP e ID del mensaje, útiles para trazar una llamada.
@@ -285,7 +354,7 @@ def chat_anthropic(incident, model, fewshot=False):
             **{k: v for k, v in request.items() if k not in ("system", "messages")},
             **extra_body,
         },
-        # end_turn, max_tokens o refusal; refusal deja el texto vacío y cuenta como error.
+        # end_turn, max_tokens o refusal; con refusal no llega el JSON pedido y el validador lo marca inválido.
         "finish_reason": message.stop_reason,
     }
 
@@ -297,6 +366,7 @@ def checked_base_url(name, base_url):
     parts = urlsplit(base_url or "")
     # Validación previa: una URL sin esquema o sin servidor no se puede consultar.
     if parts.scheme not in ("http", "https") or not parts.hostname:
+        # Detiene la ejecución con el nombre de la variable y el formato esperado.
         raise ValueError(f"Falta {name} con http(s)://servidor/…")
     # Las claves solo viajan sin cifrar hacia servidores de tu propio equipo.
     if parts.scheme == "http" and parts.hostname not in (
@@ -304,23 +374,36 @@ def checked_base_url(name, base_url):
         "127.0.0.1",
         "::1",
     ):
+        # Detiene la ejecución: no se enviaría una clave sin cifrar a otro equipo.
         raise ValueError(f"{name} remota debe usar https")
+    # URL aceptada, sin cambios.
     return base_url
 
 
 # Petición Chat Completions común a OpenAI, OpenRouter y APIs compatibles.
 # token_field cambia según el proveedor: max_tokens o max_completion_tokens.
 def chat_completions(
+    # Texto de la incidencia que se clasifica.
     incident,
+    # ID del modelo en esta ruta.
     model,
+    # True añade los cuatro ejemplos fijados de train.
     fewshot,
+    # * obliga a pasar por nombre los argumentos siguientes (provider=..., key=...).
     *,
+    # Nombre de la ruta: openai, openrouter o compatible.
     provider,
+    # URL base de la API, sin /chat/completions.
     base_url,
+    # Clave de la API; None si el servidor no la pide.
     key,
+    # Nombre del límite de salida que acepta esta API.
     token_field="max_tokens",
+    # Temperatura por defecto del adaptador; None no la envía.
     temperature=0,
+    # Campos propios de la ruta que se añaden al cuerpo.
     defaults=None,
+    # Cabeceras HTTP adicionales.
     headers=None,
 ):
     # Cliente HTTP; las peticiones se realizan al llamarlo, no por el simple import.
@@ -328,71 +411,95 @@ def chat_completions(
 
     # Cuerpo de la petición: instrucciones, entradas y parámetros con los nombres que exige esta API.
     payload = {
+        # ID del modelo.
         "model": model,
+        # Conversación completa (system, few-shot opcional e incidencia).
         "messages": messages(incident, fewshot),
+        # Límite de salida con el nombre que use esta API.
         token_field: MAX_NEW_TOKENS,
+        # Campos propios de la ruta (por ejemplo, los de OpenRouter).
         **(defaults or {}),
     }
     # Opciones de .env: temperatura y campos extra, solo para la ruta configurada.
     env_temperature, extra = route_settings(provider)
     # Temperatura del adaptador salvo que .env la cambie u ordene omitirla.
     temperature = temperature if env_temperature == "defecto" else env_temperature
+    # None significa no enviar el campo temperature.
     if temperature is not None:
+        # Añade la temperatura al cuerpo de la petición.
         payload["temperature"] = temperature
     # Combina los campos extra de .env con los del adaptador.
     payload = merged(payload, extra)
     # Cabeceras: autenticación Bearer solo si hay clave; los servidores locales pueden no pedirla.
     sent_headers = {"Content-Type": "application/json", **(headers or {})}
+    # Solo con clave se añade la cabecera de autenticación.
     if key:
+        # Formato Bearer: «Bearer <clave>»; la clave nunca se guarda en resultados.
         sent_headers["Authorization"] = "Bearer " + key
     # Inicio de la medida temporal alrededor de la llamada completa.
     start = time.perf_counter()
     # Timeout separa conexión/lectura; stream=True permite lectura acotada y redirects quedan desactivados.
     response = requests.post(
+        # URL base + /chat/completions.
         base_url.rstrip("/") + "/chat/completions",
         headers=sent_headers,
         json=payload,
+        # (10, 60): hasta 10 s para conectar y 60 s esperando datos.
         timeout=(10, 60),
+        # stream=True: el cuerpo se lee después por bloques con límite de tamaño.
         stream=True,
+        # Una redirección se trata como error, no se sigue.
         allow_redirects=False,
     )
     # Comprueba el estado HTTP antes de tratar el cuerpo como una respuesta válida del modelo.
     if response.status_code != 200:
         # Cierra el recurso abierto; libera socket/conexión aunque el paso anterior haya fallado.
         response.close()
+        # Error HTTP (401 clave, 429 cuota, 400 parámetro…): se registra sin reintentar.
         raise RuntimeError(
             f"{provider} HTTP {response.status_code}; no se reintenta ni cambia el modelo"
         )
     # Lee el JSON acotado y extrae el consumo usando el nombre propio de esta API.
     data = bounded_json(response)
+    # Bloque usage con los tokens; si falta, queda un diccionario vacío.
     usage = data.get("usage") or {}
     # Primera alternativa válida de la respuesta del servicio.
     choice = first_choice(data)
     # Texto original que generó el modelo; no se repara antes de valorarlo o guardarlo.
     raw = model_text(choice["message"].get("content"))
+    # Tokens de entrada y salida; None si el proveedor no los informa.
     tokens_in, tokens_out = usage.get("prompt_tokens"), usage.get("completion_tokens")
     # OpenRouter informa el importe en usage.cost; en otras rutas se usa la tarifa de .env.
     if usage.get("cost") is not None:
+        # Importe informado por el propio proveedor.
         cost, method = usage.get("cost"), f"usage.cost de {provider}"
     else:
+        # Sin importe informado: tarifa de .env o None.
         cost, method = tariff_cost(provider, model, tokens_in, tokens_out)
+    # Registro común de la consulta: los mismos campos que el resto de rutas.
     return {
+        # Texto tal como llegó, sin reparar.
         "respuesta_original": raw,
+        # Segundos desde el envío hasta recibir la respuesta completa.
         "latencia_s": time.perf_counter() - start,
         # Tokens informados por el proveedor; los campos ausentes se conservan como None.
         "tokens_entrada": tokens_in,
         "tokens_salida": tokens_out,
+        # Coste y método de cálculo.
         "coste_usd": cost,
         "coste_metodo": method,
+        # Modelo que respondió según la API.
         "model": data.get("model"),
         # OpenRouter indica qué proveedor sirvió la petición; si no, se registra la ruta.
         "provider": data.get("provider") or provider,
         "ruta": provider,
+        # Identificador de la petición en el proveedor, útil para soporte.
         "request_id": data.get("id"),
         # Registra opciones solicitadas pero excluye el contenido de messages de este campo de metadatos.
         "parametros_solicitados": {
             k: v for k, v in payload.items() if k not in ("messages",)
         },
+        # Motivo de parada: stop, length (límite de tokens)…
         "finish_reason": choice.get("finish_reason"),
     }
 
@@ -404,19 +511,26 @@ def chat_openai(incident, model, fewshot=False):
     load_config()
     # Clave leída desde el entorno; se usa en la cabecera de autenticación y no se incluye en resultados.
     key = os.getenv("OPENAI_API_KEY")
+    # Sin clave no se envía la petición: se detiene con un mensaje claro.
     if not key:
+        # Mensaje con el nombre de la variable; nunca su valor.
         raise ValueError("Falta OPENAI_API_KEY")
+    # Delega en el cliente Chat Completions común con los ajustes de OpenAI.
     return chat_completions(
         incident,
         model,
         fewshot,
+        # Nombre de la ruta en resultados y en route_settings.
         provider="openai",
+        # URL de OpenAI o la alternativa de OPENAI_BASE_URL, comprobada antes de usarla.
         base_url=checked_base_url(
             "OPENAI_BASE_URL",
             os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1",
         ),
         key=key,
+        # OpenAI llama así al límite de salida.
         token_field="max_completion_tokens",
+        # None: no envía temperatura.
         temperature=None,
     )
 
@@ -428,24 +542,32 @@ def chat_openrouter(incident, model, fewshot=False):
     load_config()
     # Clave leída desde el entorno; se usa en la cabecera de autenticación y no se incluye en resultados.
     key = os.getenv("OPENROUTER_API_KEY")
-    # Validación previa: Falta OPENROUTER_API_KEY.
+    # Sin clave no se envía la petición: se detiene con un mensaje claro.
     if not key:
+        # Mensaje con el nombre de la variable; nunca su valor.
         raise ValueError("Falta OPENROUTER_API_KEY")
     # usage.include pide el importe; require_parameters evita proveedores que ignoren parámetros.
     defaults = {"usage": {"include": True}, "provider": {"require_parameters": True}}
     # Razonamiento mínimo para Gemini y desactivado para Claude, como en el protocolo anterior.
     if model.startswith("google/"):
+        # Gemini por OpenRouter: razonamiento al mínimo para dejar los 180 tokens a la respuesta.
         defaults["reasoning"] = {"effort": "minimal"}
+    # Modelos de Anthropic por OpenRouter.
     elif model.startswith("anthropic/"):
+        # Razonamiento desactivado, como en la ruta directa de Anthropic.
         defaults["reasoning"] = {"enabled": False}
+    # Delega en el cliente Chat Completions común con los ajustes de OpenRouter.
     return chat_completions(
         incident,
         model,
         fewshot,
         provider="openrouter",
+        # Endpoint fijo de OpenRouter.
         base_url="https://openrouter.ai/api/v1",
         key=key,
+        # usage, provider y reasoning definidos arriba.
         defaults=defaults,
+        # X-Title identifica la aplicación en el panel de OpenRouter.
         headers={"X-Title": "thePower S7 S8"},
     )
 
@@ -455,13 +577,16 @@ def chat_openrouter(incident, model, fewshot=False):
 def chat_compatible(incident, model, fewshot=False):
     # Carga las variables necesarias justo antes de la petición, sin mostrarlas.
     load_config()
+    # Delega en el cliente común; la URL se comprueba antes de enviar la clave.
     return chat_completions(
         incident,
         model,
         fewshot,
         provider="compatible",
         base_url=checked_base_url("COMPAT_BASE_URL", os.getenv("COMPAT_BASE_URL")),
+        # Clave opcional: los servidores locales suelen no pedirla.
         key=os.getenv("COMPAT_API_KEY"),
+        # max_tokens salvo que COMPAT_TOKEN_FIELD indique otro nombre.
         token_field=os.getenv("COMPAT_TOKEN_FIELD") or "max_tokens",
     )
 
@@ -473,23 +598,29 @@ def gemini_reply(data):
     usage = data.get("usageMetadata") or {}
     # Alternativas de generación del proveedor, comprobadas como lista acotada.
     candidates = objects(data.get("candidates", []), 8)
-    # Validación previa: Google no devolvió ningún candidato.
+    # Sin candidatos (por ejemplo, una petición bloqueada) no hay respuesta que valorar.
     if not candidates:
+        # Detiene el proceso: el caso se registrará como error.
         raise ValueError("Google no devolvió ningún candidato")
     # Contenido de la primera alternativa; se comprobará antes de extraer bloques de texto.
     content = candidates[0].get("content", {})
-    # Validación previa: Contenido Google mal formado.
+    # content debe ser un objeto con la lista parts.
     if not isinstance(content, dict):
+        # Detiene el proceso: formato inesperado.
         raise ValueError("Contenido Google mal formado")
     # Bloques de contenido que se recorren para reconstruir la respuesta.
     parts = objects(content.get("parts", []))
+    # Registro parcial; cada ruta Google añade tiempo, coste y modelo.
     return {
         # Texto original que generó el modelo; no se repara antes de valorarlo o guardarlo.
         "respuesta_original": joined_text(
             [part for part in parts if not part.get("thought")], "text"
         ),
+        # Tokens de la petición (incluye system y few-shot).
         "tokens_entrada": usage.get("promptTokenCount"),
+        # Tokens generados en la respuesta.
         "tokens_salida": usage.get("candidatesTokenCount"),
+        # Motivo de parada: STOP, MAX_TOKENS, SAFETY…
         "finish_reason": candidates[0].get("finishReason"),
     }
 
@@ -499,8 +630,11 @@ def gemini_reply(data):
 def gemini_payload(incident, fewshot=False):
     # Mensajes comunes: el primero es system y el resto alterna user/assistant y acaba en user.
     conversation = messages(incident, fewshot)
+    # Cuerpo con los nombres de campo de Gemini (camelCase).
     return {
+        # Instrucciones comunes: Gemini las recibe aparte, como Claude.
         "systemInstruction": {"parts": [{"text": conversation[0]["content"]}]},
+        # Turnos de la conversación; Gemini llama model al rol assistant.
         "contents": [
             {
                 "role": "model" if m["role"] == "assistant" else "user",
@@ -508,8 +642,11 @@ def gemini_payload(incident, fewshot=False):
             }
             for m in conversation[1:]
         ],
+        # Configuración de generación: misma temperatura y límite que el resto de rutas.
         "generationConfig": {
+            # Temperatura 0: la respuesta más probable, sin variación.
             "temperature": 0,
+            # Límite de 180 tokens de salida.
             "maxOutputTokens": MAX_NEW_TOKENS,
             # Pensamiento mínimo, igual que en la ruta Vertex del ejercicio.
             "thinkingConfig": {"thinkingLevel": "MINIMAL"},
@@ -527,52 +664,73 @@ def chat_gemini(incident, model, fewshot=False):
     load_config()
     # Clave leída desde el entorno; viaja en la cabecera x-goog-api-key, nunca en la URL.
     key = os.getenv("GEMINI_API_KEY")
+    # Sin clave no se envía la petición.
     if not key:
+        # Mensaje con el nombre de la variable; nunca su valor.
         raise ValueError("Falta GEMINI_API_KEY")
     # El ID puede llegar como models/{id}; se codifica para que no altere la ruta de la URL.
     name = quote(model.removeprefix("models/"), safe="-._")
     # Cuerpo común y opciones de .env (por ejemplo, otro thinkingLevel para modelos Pro).
     payload = gemini_payload(incident, fewshot)
+    # Ajustes de .env para la ruta gemini (temperatura y campos extra).
     temperature, extra = route_settings("gemini")
+    # "omitir" en .env: se quita la temperatura del cuerpo.
     if temperature is None:
+        # pop elimina la clave del diccionario.
         payload["generationConfig"].pop("temperature")
+    # Temperatura numérica de .env en lugar de 0.
     elif temperature != "defecto":
+        # Sustituye el valor dentro de generationConfig.
         payload["generationConfig"]["temperature"] = temperature
+    # Mezcla los campos extra de .env con el cuerpo.
     payload = merged(payload, extra)
     # Inicio de la medida temporal alrededor de la llamada completa.
     start = time.perf_counter()
     # Respuesta HTTP que se inspeccionará y cerrará después de leerla.
     response = requests.post(
+        # Endpoint de la Gemini API: versión v1beta, modelo y método generateContent.
         f"https://generativelanguage.googleapis.com/v1beta/models/{name}:generateContent",
+        # Clave en una cabecera, no en la URL, donde podría quedar en registros.
         headers={"x-goog-api-key": key, "Content-Type": "application/json"},
         json=payload,
+        # (10, 60): hasta 10 s para conectar y 60 s esperando datos.
         timeout=(10, 60),
+        # stream=True: lectura posterior por bloques con límite.
         stream=True,
+        # Una redirección se trata como error.
         allow_redirects=False,
     )
     # Comprueba el estado HTTP antes de tratar el cuerpo como una respuesta válida del modelo.
     if response.status_code != 200:
         # Cierra el recurso abierto; libera socket/conexión aunque el paso anterior haya fallado.
         response.close()
+        # Error HTTP: se registra sin reintentar.
         raise RuntimeError(
             f"Gemini HTTP {response.status_code}; no se reintenta ni cambia el modelo"
         )
     # Lee el JSON acotado y separa texto, tokens y motivo de parada.
     data = bounded_json(response)
+    # Texto, tokens y motivo de parada extraídos del formato de Gemini.
     reply = gemini_reply(data)
     # La API no devuelve importe: se calcula con la tarifa declarada en .env, si existe.
     cost, method = tariff_cost(
         "gemini", model, reply["tokens_entrada"], reply["tokens_salida"]
     )
+    # Registro común: reply aporta texto, tokens y motivo de parada.
     return {
         **reply,
+        # Segundos desde el envío hasta la respuesta completa.
         "latencia_s": time.perf_counter() - start,
+        # Coste y método de cálculo.
         "coste_usd": cost,
         "coste_metodo": method,
+        # Versión exacta que respondió, si la API la informa.
         "model": data.get("modelVersion") or model,
         "provider": "Google · Gemini API",
         "ruta": "gemini",
+        # Identificador de la respuesta en Google.
         "request_id": data.get("responseId"),
+        # Parámetros enviados, sin instrucciones ni conversación.
         "parametros_solicitados": {
             k: v
             for k, v in payload.items()
@@ -590,7 +748,7 @@ def chat_local(incident, model=None, fewshot=False, native=True):
     # Carga las variables necesarias justo antes de la petición, sin mostrarlas.
     load_config()
     # Normaliza la URL del servidor local para construir las rutas /models y /chat/completions.
-    base = os.getenv("LOCAL_BASE_URL", "http://localhost:1234/v1").rstrip("/")
+    base = (os.getenv("LOCAL_BASE_URL") or "http://localhost:1234/v1").rstrip("/")
     # Prioriza el ID recibido por argumento y, si falta, el ID del entorno local.
     model = model or os.getenv("LOCAL_MODEL_ID")
     # Consulta catálogo solo si todavía no hay un modelo explícito.
@@ -599,19 +757,20 @@ def chat_local(incident, model=None, fewshot=False, native=True):
         listing = requests.get(
             base + "/models", timeout=10, stream=True, allow_redirects=False
         )
+        # try/finally: el catálogo se cierra aunque falle la lectura.
         try:
             # Comprueba el estado HTTP antes de tratar el cuerpo como una respuesta válida del modelo.
             if listing.status_code != 200:
+                # Detiene el proceso: LM Studio no respondió bien al catálogo.
                 raise ValueError("Catálogo HTTP no disponible")
-            # Convierte un estado HTTP de error en excepción antes de leer el catálogo.
-            listing.raise_for_status()
             # Extrae únicamente identificadores válidos de la respuesta acotada.
             models = model_ids(bounded_json(listing))
         finally:
             # Cierra el recurso abierto; libera socket/conexión aunque el paso anterior haya fallado.
             listing.close()
-        # Validación previa: Indica --modelo; el servidor no tiene exactamente un modelo.
+        # Con cero o varios modelos cargados no se adivina: hay que indicar --modelo.
         if len(models) != 1:
+            # Detiene el proceso con una indicación de qué hacer.
             raise ValueError(
                 "Indica --modelo; el servidor no tiene exactamente un modelo"
             )
@@ -619,37 +778,50 @@ def chat_local(incident, model=None, fewshot=False, native=True):
         model = models[0]
     # Elige REST v1 de LM Studio; la otra rama mantiene el esquema compatible messages.
     if native:
-        # Validación previa: Few-shot local: utiliza --local-api openai o el runner Qwen.
+        # La API nativa recibe una sola entrada (input), sin turnos previos: no admite few-shot.
         if fewshot:
+            # Detiene el proceso con la alternativa que sí admite few-shot.
             raise ValueError(
                 "Few-shot local: utiliza --local-api openai o el runner Qwen"
             )
+        # Instrucciones comunes del curso, enviadas como system_prompt en esta API.
         from .common import basic_prompt
 
-        # Cuerpo de la petición: instrucciones, entradas y parámetros con los nombres que exige esta API.
+        # Cuerpo de la API nativa: input + system_prompt, reasoning off y store=False
+        # (LM Studio no guarda la conversación en el servidor).
         payload = {
+            # ID del modelo cargado en LM Studio.
             "model": model,
+            # La incidencia como entrada única.
             "input": incident,
+            # Instrucciones comunes del curso.
             "system_prompt": basic_prompt(),
+            # Sin razonamiento: los 180 tokens quedan para la respuesta.
             "reasoning": "off",
+            # Temperatura 0: la respuesta más probable.
             "temperature": 0,
+            # Límite de salida (nombre propio de esta API).
             "max_output_tokens": MAX_NEW_TOKENS,
+            # No guarda la conversación en LM Studio.
             "store": False,
         }
-        # REST nativa permite pedir reasoning off; store=False se envía como opción de esta API.
-        # URL elegida para esta ruta de inferencia; cada API tiene una estructura propia.
+        # Endpoint nativo /api/v1/chat, fuera del prefijo /v1 de la interfaz compatible.
         endpoint = base.removesuffix("/v1") + "/api/v1/chat"
     else:
-        # Cuerpo de la petición: instrucciones, entradas y parámetros con los nombres que exige esta API.
+        # Cuerpo compatible con Chat Completions: la misma lista messages que los demás proveedores.
         payload = {
+            # ID del modelo cargado en LM Studio.
             "model": model,
+            # Conversación completa con few-shot opcional.
             "messages": messages(incident, fewshot),
+            # Temperatura 0: la respuesta más probable.
             "temperature": 0,
+            # Límite de salida de 180 tokens.
             "max_tokens": MAX_NEW_TOKENS,
         }
-        # URL elegida para esta ruta de inferencia; cada API tiene una estructura propia.
+        # Endpoint compatible /v1/chat/completions.
         endpoint = base + "/chat/completions"
-    # Inicio de la medida temporal; el tiempo de carga de pesos se mide por separado cuando corresponde.
+    # Inicio de la medida temporal alrededor de la llamada completa.
     start = time.perf_counter()
     # Respuesta HTTP que se inspeccionará y cerrará después de leerla.
     response = requests.post(
@@ -659,9 +831,11 @@ def chat_local(incident, model=None, fewshot=False, native=True):
     if response.status_code != 200:
         # Cierra el recurso abierto; libera socket/conexión aunque el paso anterior haya fallado.
         response.close()
+        # Error HTTP: se registra sin reintentar.
         raise RuntimeError(f"LM Studio HTTP {response.status_code}")
     # Lee el JSON acotado y extrae el consumo usando el nombre propio de esta API.
     data = bounded_json(response)
+    # Tokens: stats en la API nativa, usage en la compatible.
     usage = data.get("stats" if native else "usage") or {}
     # Texto original que generó el modelo; no se repara antes de valorarlo o guardarlo.
     raw = (
@@ -673,18 +847,28 @@ def chat_local(incident, model=None, fewshot=False, native=True):
         if native
         else model_text(first_choice(data)["message"].get("content"))
     )
+    # Registro común de la consulta local.
     return {
+        # Texto tal como llegó, sin reparar.
         "respuesta_original": raw,
+        # Segundos de la petición completa.
         "latencia_s": time.perf_counter() - start,
+        # Modelo que respondió (o el pedido, si la API no lo informa).
         "model": data.get("model", model),
+        # Programa que ejecutó el modelo.
         "runtime": "LM Studio",
+        # Tokens de entrada con el nombre de cada API.
         "tokens_entrada": usage.get("input_tokens" if native else "prompt_tokens"),
+        # Tokens de salida con el nombre de cada API.
         "tokens_salida": usage.get(
             "total_output_tokens" if native else "completion_tokens"
         ),
+        # Qué API de LM Studio se usó.
         "api": "LM Studio REST v1" if native else "OpenAI compatible",
+        # Coste local no medido: None, no 0.
         "coste_usd": None,
         "coste_metodo": "Hardware/energía no medidos; sin tarifa de API",
+        # Parámetros enviados, sin instrucciones ni conversación.
         "parametros_solicitados": {
             k: v
             for k, v in payload.items()
@@ -697,11 +881,14 @@ def chat_local(incident, model=None, fewshot=False, native=True):
 # user contiene la incidencia y model la respuesta objetivo; ID/familia no son mensajes.
 def gemini_record(row):
     """El JSONL conserva system y la respuesta objetivo; el ID va en un archivo separado."""
+    # Instrucciones comunes del curso (prompts/basico.txt).
     from .common import basic_prompt
 
     # La entrada es role=user y la etiqueta/JSON de entrenamiento es role=model en el formato Gemini.
     return {
+        # Mismas instrucciones que en S7, en el campo propio de Gemini.
         "systemInstruction": {"parts": [{"text": basic_prompt()}]},
+        # Un turno user (incidencia) y un turno model (respuesta objetivo).
         "contents": [
             {"role": "user", "parts": [{"text": row["incidencia"]}]},
             # Conserva el JSON objetivo como texto para enseñar la misma tarea y no un objeto de configuración.
@@ -720,63 +907,99 @@ def google_client(location=None):
     load_config()
     # Proyecto explícito del laboratorio que recibirá la llamada Google.
     project = os.getenv("GOOGLE_CLOUD_PROJECT")
-    # Validación previa: Falta GOOGLE_CLOUD_PROJECT del laboratorio; no se usa el proyecto ADC por defecto.
+    # Sin proyecto explícito se detiene: no usa el proyecto por defecto de ADC
+    # (Application Default Credentials, la identidad Google configurada en el equipo).
     if not project:
+        # Detiene la ejecución antes de crear ningún cliente.
         raise ValueError(
             "Falta GOOGLE_CLOUD_PROJECT del laboratorio; no se usa el proyecto ADC por defecto"
         )
+    # SDK de Google Gen AI; se importa aquí para que importar curso.remote no lo cargue.
     from google import genai
+
+    # types define objetos de configuración del SDK, como HttpOptions.
     from google.genai import types
 
+    # Cliente Vertex AI (vertexai=True) del proyecto del laboratorio.
     return genai.Client(
+        # vertexai=True: usa Vertex AI (Google Cloud) en lugar de la Gemini API con clave.
         vertexai=True,
         project=project,
-        location=location or os.getenv("GEMINI_SERVING_LOCATION", "eu"),
-        # Usa ubicación explícita o eu; es configuración de servicio, no la región del trabajo de tuning.
+        # Ubicación explícita o eu; es la región de servicio, no necesariamente la del trabajo de tuning.
+        location=location or os.getenv("GEMINI_SERVING_LOCATION") or "eu",
+        # Versión v1 de la API y timeout del SDK expresado en milisegundos (60 s).
         http_options=types.HttpOptions(api_version="v1", timeout=60000),
     )
 
 
-# Versión v1 y timeout del SDK expresado en milisegundos.
+# Servidor de Vertex AI para una ubicación. Las multirregiones us/eu usan
+# aiplatform.us|eu.rep.googleapis.com, global usa aiplatform.googleapis.com y una
+# región concreta, como europe-west4, usa europe-west4-aiplatform.googleapis.com.
+def vertex_host(location):
+    # Multirregión: Google procesa los datos dentro de EE. UU. (us) o de la UE (eu).
+    if location in ("us", "eu"):
+        # Servidor de la multirregión, por ejemplo aiplatform.eu.rep.googleapis.com.
+        return f"aiplatform.{location}.rep.googleapis.com"
+    # Endpoint global: Google elige qué región atiende la petición.
+    if location == "global":
+        # Servidor global.
+        return "aiplatform.googleapis.com"
+    # Región concreta: su nombre va delante del dominio.
+    return f"{location}-aiplatform.googleapis.com"
 
 
 # Consulta generateContent autenticado con ADC en el proyecto y ubicación indicados.
 # Devuelve solo bloques de respuesta, excluyendo los bloques marcados como pensamiento.
 # El SDK/REST de inferencia no crea un trabajo de tuning.
 def chat_google(incident, model):
-    # REST en el transporte SDK: campo thinkingLevel admitido por la API actual,
-    # aunque la versión docente del SDK sea anterior a su incorporación al tipo Python.
     # Carga las variables necesarias justo antes de la petición, sin mostrarlas.
     load_config()
-    # Validación previa: Falta GOOGLE_CLOUD_PROJECT del laboratorio.
+    # Sin proyecto del laboratorio no se construye la petición.
     if not os.getenv("GOOGLE_CLOUD_PROJECT"):
+        # Mensaje con el nombre de la variable que falta.
         raise ValueError("Falta GOOGLE_CLOUD_PROJECT del laboratorio")
-    # Inicio de la medida temporal; el tiempo de carga de pesos se mide por separado cuando corresponde.
-    start = time.perf_counter()
     # Cuerpo de la petición: el mismo que la Gemini API, con temperatura 0, 180 tokens y thinking MINIMAL.
     payload = gemini_payload(incident)
-    # Uso de REST autorizado por ADC evita depender de tipos privados del SDK.
+    # REST autenticado con ADC en lugar de los tipos del SDK: así se envía thinkingLevel
+    # aunque la versión instalada del SDK todavía no lo incluya en sus tipos Python.
     import google.auth
+
+    # AuthorizedSession: sesión de requests que añade el token de Google a cada petición.
     from google.auth.transport.requests import AuthorizedSession
 
     # Obtiene ADC con el scope cloud-platform; la identidad real procede del entorno Google autorizado.
     credentials, _ = google.auth.default(
         scopes=["https://www.googleapis.com/auth/cloud-platform"]
     )
-    # Proyecto explícito del laboratorio que recibirá la llamada Google.
+    # Proyecto del laboratorio que recibirá la llamada.
     project = os.environ["GOOGLE_CLOUD_PROJECT"]
-    location = os.getenv("GEMINI_SERVING_LOCATION", "eu")
-    # Nombre completo del recurso Google: modelo publicado o recurso ajustado.
-    resource = (
-        model
-        if model.startswith("projects/")
-        else f"projects/{project}/locations/{location}/publishers/google/models/{model}"
-    )
-    # Dirección de la petición o del servidor local que se va a consultar.
-    url = f"https://{location}-aiplatform.googleapis.com/v1/{resource}:generateContent"
+    # Región de servicio de los modelos publicados: eu por defecto, también si .env la deja vacía.
+    location = os.getenv("GEMINI_SERVING_LOCATION") or "eu"
+    # Un recurso ajustado ya lleva su región (projects/…/locations/europe-west4/endpoints/…):
+    # la petición debe ir al servidor de esa misma región.
+    if model.startswith("projects/"):
+        # El nombre completo del recurso se usa tal cual en la URL.
+        resource = model
+        # Trozos del nombre separados por "/"; la región va justo después de "locations".
+        parts = model.split("/")
+        # Solo si el nombre contiene locations/<región>.
+        if "locations" in parts[:-1]:
+            # La región es el trozo que sigue a "locations".
+            location = parts[parts.index("locations") + 1]
+    # Modelo publicado por Google, por ejemplo gemini-3.1-flash-lite.
+    else:
+        # Ruta del modelo publicado dentro del proyecto y la región de servicio.
+        resource = (
+            f"projects/{project}/locations/{location}/publishers/google/models/{model}"
+        )
+    # URL completa: servidor de esa ubicación, versión v1 de la API y método generateContent.
+    url = f"https://{vertex_host(location)}/v1/{resource}:generateContent"
     # Sesión HTTP que aplica la autenticación Google a las peticiones.
     session = AuthorizedSession(credentials)
+    # try/finally: la sesión se cierra pase lo que pase.
     try:
+        # Inicio de la medida temporal justo antes de la llamada, como en las demás rutas.
+        start = time.perf_counter()
         # Respuesta HTTP que se inspeccionará y cerrará después de leerla.
         response = session.post(
             url, json=payload, timeout=60, stream=True, allow_redirects=False
@@ -785,17 +1008,23 @@ def chat_google(incident, model):
         if response.status_code != 200:
             # Cierra el recurso abierto; libera socket/conexión aunque el paso anterior haya fallado.
             response.close()
+            # Error HTTP (permiso, cuota, modelo no disponible…): se registra sin reintentar.
             raise RuntimeError(f"Google HTTP {response.status_code}")
         # Lee el JSON acotado y separa texto, tokens y motivo de parada.
         reply = gemini_reply(bounded_json(response))
+        # Registro común: reply aporta texto, tokens y motivo de parada.
         return {
             **reply,
+            # Segundos desde el envío hasta la respuesta completa.
             "latencia_s": time.perf_counter() - start,
+            # Vertex AI no devuelve importe: None, no 0.
             "coste_usd": None,
             "coste_metodo": "La API no devuelve importe; consultar facturación/tarifa por separado",
+            # Recurso completo consultado (modelo publicado o ajustado).
             "model": resource,
             "provider": "Google Cloud",
             "ruta": "google",
+            # Parámetros de generación enviados.
             "parametros_solicitados": payload["generationConfig"],
         }
     finally:

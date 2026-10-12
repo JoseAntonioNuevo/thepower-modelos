@@ -84,8 +84,8 @@ claves.
 | Cómo calcular y leer resultados | `scripts/resumir.py:summarize`, `main`; `docs/resultados-referencia.json` |
 | Cómo conectar isbetter.ai | `README.md`, `scripts/servir_comparacion.py:ComparisonEngine`, `ComparisonServer`, `ComparisonHandler`, `validate_request` |
 | Cómo funcionan cola, lock, streaming y HTTP | `scripts/servir_comparacion.py:events`, `do_POST`; `tests/test_comparison_server.py` |
-| Cómo elegir proveedor y modelo remoto en `.env` | `curso/remote.py:route`, `route_settings`, `require_credentials`, `chat`; `.env.example`; `docs/modelos-remotos.md` |
-| Diferencias de petición entre proveedores | `curso/remote.py:chat_anthropic`, `chat_completions` (`chat_openai`, `chat_openrouter`, `chat_compatible`), `chat_gemini`, `chat_local`, `chat_google`; `tests/test_proveedores.py` |
+| Cómo elegir proveedor y modelo remoto en `.env` | `curso/remote.py:route`, `route_settings`, `require_credentials`, `CREDENCIALES`, `chat`; `scripts/preflight.py`; `.env.example`; `docs/modelos-remotos.md` |
+| Diferencias de petición entre proveedores | `curso/remote.py:chat_anthropic`, `chat_completions` (`chat_openai`, `chat_openrouter`, `chat_compatible`), `chat_gemini`, `chat_local`, `chat_google` (`vertex_host` elige el servidor de Vertex AI); `tests/test_proveedores.py` |
 | Cómo convertir los datos para Gemini | `scripts/convertir_gemini.py`, `curso/remote.py:gemini_record`, `datos/gemini/ids.json` |
 | Cómo preparar o ejecutar tuning Google | `scripts/gemini_tuning.py:job_spec`, `main`; `curso/remote.py:google_client`; `notebooks/S8-Gemini-Claude.ipynb` |
 | Cómo evaluar modelos remotos y las seis condiciones | `scripts/evaluar_remotos.py:main`, `FIXED_ROUTES`; `scripts/resumir.py:CONDITIONS`, `EXTRA_CONDITIONS`; `docs/ejercicio.md` |
@@ -180,7 +180,7 @@ sin secretos. Pide solo la información que falte; inspecciona lo disponible.
 | No hay modelo, descarga falla o modo offline falla | Revisión/cache y primera descarga con red. Offline necesita los archivos ya disponibles; descargar no entrena ni consulta. |
 | `adaptador_local: false` o faltan archivos PEFT | Normal antes de entrenar; confirma `--adaptador`, carpeta y `adapter_config.json`. No inventes un adaptador ni asumas que viene en Git. |
 | `Salida no vacía` o archivo de resultados existente | Conserva lo anterior y usa una ruta nueva con `--salida`. No borres artefactos para quitar el error. |
-| `Datos o protocolo cambiaron` | Revisa `git diff -- datos prompts config`, variables públicas de modelo/revisión y `assert_frozen`. Explica la diferencia; no cambies hashes a ciegas. |
+| `Datos o protocolo cambiaron` | Revisa `git diff -- datos prompts config`, variables públicas de modelo/revisión y `assert_frozen`. En Windows, comprueba saltos de línea CRLF (`git ls-files --eol`); `.gitattributes` fija LF. Explica la diferencia; no cambies hashes a ciegas. |
 | Falta memoria o entrenamiento lento | Dispositivo elegido en `load_qwen`, proceso activo y recursos disponibles. CPU puede ser lenta; no prometas los tiempos de referencia ni cambies receta/modelo sin identificar otra variante. |
 | No hay GPU o laboratorio para completar la ejecución | Consulta las modalidades de `docs/ejercicio.md`. Ayuda a preparar código/datos/configuración y deja las métricas no obtenidas pendientes; no contrates recursos ni inventes entrenamiento para completar la entrega. |
 | Respuesta inválida o LoRA no mejora | Reglas, salida original, `validate_answer` y métricas separadas. Un error es resultado del experimento; no repares ni ajustes con test. |

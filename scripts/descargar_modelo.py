@@ -20,10 +20,11 @@ from curso.common import MODEL_ID, REVISION, assert_frozen
 def main():
     # Verifica que el modelo y los hashes siguen correspondiendo al protocolo fijado.
     assert_frozen()
-    # Descarga checkpoints o publica archivos del adaptador en el Hub.
+    # snapshot_download descarga una revisión concreta de un repositorio del Hub a la caché local.
     from huggingface_hub import snapshot_download
 
-    # Descarga/cacha la revisión exacta: pesos y tokenizer permitidos, sin usar un token de cuenta.
+    # Descarga a la caché la revisión exacta: solo configuración, pesos y tokenizer;
+    # token=False no usa ninguna cuenta y max_workers=2 limita las descargas en paralelo.
     snapshot_download(
         repo_id=MODEL_ID,
         revision=REVISION,
@@ -42,7 +43,7 @@ def main():
             "chat_template.jinja",
         ],
     )
-    # Muestra el resultado/estado de este paso en la terminal; las claves no se añaden al informe.
+    # Confirma en la terminal qué modelo y revisión quedaron en la caché.
     print(json.dumps({"modelo": MODEL_ID, "revision": REVISION, "descargado": True}))
 
 

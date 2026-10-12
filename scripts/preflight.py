@@ -17,28 +17,37 @@ import argparse, importlib.util, json, os, platform
 # Reutiliza funciones del núcleo compartido para mantener el mismo protocolo entre scripts.
 from curso.common import ROOT, validate_splits, assert_frozen
 
-# Reutiliza funciones del núcleo compartido para mantener el mismo protocolo entre scripts.
-from curso.remote import load_config, configured_provider, configured_model
+# Lectura de .env y ruta remota configurada, sin llamar al proveedor.
+from curso.remote import (
+    CREDENCIALES,
+    load_config,
+    configured_provider,
+    configured_model,
+)
 
-# Reutiliza funciones del núcleo compartido para mantener el mismo protocolo entre scripts.
+# Lectura acotada del catálogo de LM Studio cuando se usa --local.
 from curso.http import bounded_json, model_ids
 
 
 # Lee --local, reúne comprobaciones y muestra un informe sin valores secretos.
 def main():
     # Parser de argumentos: describe las opciones que admite este comando.
-    # Opción de terminal '--local': el parser aplica tipo, valores permitidos y obligatoriedad definidos aquí.
-    # Argumentos de la terminal convertidos a atributos como args.salida o args.modelo.
-    # Carga configuración del entorno antes de comprobar opciones o crear una petición.
     p = argparse.ArgumentParser()
+    # --local: consulta además el catálogo de modelos de LM Studio (solo lectura).
     p.add_argument("--local", action="store_true")
+    # Argumentos de la terminal convertidos a atributos como args.local.
     args = p.parse_args()
+    # Carga .env antes de comprobar qué variables existen; no imprime sus valores.
     load_config()
     # Reúne versión, integridad, paquetes y presencia de configuración; solo publica booleanos de credenciales.
     result = {
+        # Versión de Python que ejecuta el script (el curso usa 3.12).
         "python": platform.python_version(),
+        # Cantidades de train/validación/test tras validar las particiones.
         "splits": validate_splits(),
+        # True si los hashes coinciden con el manifiesto congelado.
         "experimento_congelado": bool(assert_frozen()),
+        # True/False por paquete: si está instalado en este entorno (sin importarlo).
         "dependencias": {
             m: importlib.util.find_spec(m) is not None
             for m in (
@@ -58,21 +67,22 @@ def main():
             "modelo": configured_model(),
         },
         # Presencia de credenciales por proveedor: solo booleanos, nunca valores.
+        # Usa la misma tabla que require_credentials: basta con una variable de cada ruta.
+        # Google se informa aparte, en google_proyecto_curso_configurado.
         "credenciales": {
-            name: bool(os.getenv(var))
-            for name, var in (
-                ("anthropic", "ANTHROPIC_API_KEY"),
-                ("openai", "OPENAI_API_KEY"),
-                ("openrouter", "OPENROUTER_API_KEY"),
-                ("gemini", "GEMINI_API_KEY"),
-                ("compatible", "COMPAT_BASE_URL"),
-            )
+            name: any(bool(os.getenv(var)) for var in variables)
+            for name, variables in CREDENCIALES.items()
+            if name != "google"
         },
+        # True si hay proyecto de Google Cloud configurado (sin mostrarlo).
         "google_proyecto_curso_configurado": bool(os.getenv("GOOGLE_CLOUD_PROJECT")),
+        # True si ya existe un adaptador entrenado en la carpeta por defecto.
         "adaptador_local": (
             ROOT / "modelos/lora-soporte/adapter_model.safetensors"
         ).exists(),
+        # Recordatorio: todos los datos del curso son ficticios.
         "datos_sinteticos": True,
+        # preflight nunca llama a un modelo: la conexión remota queda sin probar.
         "conexion_remota": "No probada; preflight no consume inferencia",
     }
     # --local añade una lectura de catálogo HTTP; sin esta opción el preflight no consulta LM Studio.
@@ -80,37 +90,39 @@ def main():
         # Cliente HTTP; las peticiones se realizan al llamarlo, no por el simple import.
         import requests
 
-        # Dirección de la petición o del servidor local que se va a consultar.
-        url = (
-            os.getenv("LOCAL_BASE_URL", "http://localhost:1234/v1").rstrip("/")
-            + "/models"
-        )
+        # URL base del servidor local; LM Studio usa el puerto 1234 por defecto.
+        base = os.getenv("LOCAL_BASE_URL") or "http://localhost:1234/v1"
+        # Catálogo /models: lista los modelos cargados sin generar nada.
+        url = base.rstrip("/") + "/models"
+        # try/except: un fallo de red o de formato se informa como texto, sin detener el informe.
         try:
             # Respuesta HTTP que se inspeccionará y cerrará después de leerla.
             response = requests.get(url, timeout=5, stream=True, allow_redirects=False)
+            # try/finally: la respuesta se cierra pase lo que pase.
             try:
                 # Comprueba el estado HTTP antes de tratar el cuerpo como una respuesta válida del modelo.
                 if response.status_code != 200:
+                    # Detiene la lectura; el except de abajo lo convierte en un aviso.
                     raise ValueError("Catálogo HTTP no disponible")
-                # Detiene la lectura si la API local devolvió un estado de error.
-                response.raise_for_status()
                 # Añade IDs de modelos válidos al informe; limita a diez segundos el recorrido de bloques.
                 result["modelos_locales"] = model_ids(
                     bounded_json(response, max_seconds=10)
                 )
             # Cierra el recurso abierto; libera socket/conexión aunque el paso anterior haya fallado.
             finally:
+                # Libera la conexión.
                 response.close()
         # Representa fallo HTTP/JSON como disponibilidad desconocida, sin imprimir cuerpos o claves.
         except (requests.RequestException, ValueError):
+            # Texto de aviso en lugar de la lista de modelos.
             result["modelos_locales"] = (
                 "Servidor local no disponible o respuesta inválida"
             )
-    # Muestra el resultado/estado de este paso en la terminal; las claves no se añaden al informe.
+    # Informe JSON en la terminal: credenciales como booleanos, nunca sus valores.
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 # Punto de entrada: ejecutar como script llama main; importar el módulo solo define sus funciones.
-# Invoca el punto de entrada únicamente cuando se ejecuta este archivo como programa.
 if __name__ == "__main__":
+    # Invoca el punto de entrada únicamente cuando se ejecuta este archivo como programa.
     main()

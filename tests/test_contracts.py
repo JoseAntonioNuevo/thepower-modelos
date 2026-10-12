@@ -9,12 +9,15 @@
 # Organiza pruebas y aserciones; los tests se ejecutan solo al invocarlos.
 import json, sys, tempfile, unittest
 
+# Buffer de texto en memoria donde se descarta la ayuda que argparse escribe en stderr.
+import io
+
 # Path permite construir rutas, comprobar archivos y leer/escribir sin concatenar separadores a mano.
 from pathlib import Path
 
 # Añade una ruta de importación para poder reutilizar el paquete curso y los scripts del proyecto.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-# Reutiliza funciones del núcleo compartido para mantener el mismo protocolo entre scripts.
+# Funciones del núcleo compartido que se ponen a prueba.
 from curso.common import (
     ROOT,
     assert_frozen,
@@ -25,20 +28,36 @@ from curso.common import (
     write_jsonl,
 )
 
-# Reutiliza funciones del núcleo compartido para mantener el mismo protocolo entre scripts.
+# Conversión al formato Gemini y cliente de Google Cloud.
 from curso.remote import gemini_record, google_client
+
+# Especificación offline del tuning de Gemini.
 from gemini_tuning import job_spec
+
+# Cálculo del resumen por condición.
 from resumir import summarize
 
 # Mocks sustituyen red/configuración para probar contratos sin proveedores reales.
 from unittest.mock import patch
+
+# Comprobación de la carpeta de salida del entrenamiento.
 from entrenar_lora import training_output
+
+# Funciones main de los scripts: se ejecutan con argumentos simulados en sys.argv.
+from demo import main as demo_main
+
+# main de evaluar_qwen.py.
+from evaluar_qwen import main as evaluar_qwen_main
+
+# main de publicar_adaptador.py.
+from publicar_adaptador import main as publish_main
 
 
 # Agrupa contratos del dataset, mensajes, validación y archivos del experimento.
 class Contracts(unittest.TestCase):
     # Prepara una respuesta objetivo ficticia antes de cada prueba; no genera datos remotos.
     def setUp(self):
+        # Objetivo ficticio con las tres claves del esquema.
         self.expected = {
             "categoria": "acceso",
             "prioridad": "media",
@@ -47,32 +66,33 @@ class Contracts(unittest.TestCase):
 
     # Rechaza Markdown alrededor del JSON y valores no estándar como NaN.
     def test_json_strict_no_fences(self):
-        # Exige rechazo o ausencia de la propiedad que rompería el contrato.
+        # Un JSON rodeado de ```json … ``` (Markdown) no cuenta como JSON válido.
         self.assertFalse(
             validate_answer(
                 "```json\n" + json.dumps(self.expected) + "\n```", self.expected
             )["json_valido"]
         )
-        # Exige rechazo o ausencia de la propiedad que rompería el contrato.
+        # NaN no existe en el JSON estándar: se rechaza.
         self.assertFalse(
             validate_answer('{"categoria":NaN}', self.expected)["json_valido"]
         )
 
     # Acepta el esquema correcto y rechaza claves adicionales.
     def test_exact_fields_and_enum(self):
-        # Exige que la propiedad comprobada sea verdadera.
+        # El objetivo exacto cumple el esquema.
         self.assertTrue(
             validate_answer(json.dumps(self.expected), self.expected)["esquema_valido"]
         )
+        # Copia del objetivo con una clave adicional.
         wrong = {**self.expected, "otra": 1}
-        # Exige rechazo o ausencia de la propiedad que rompería el contrato.
+        # Una clave adicional («otra») rompe el esquema.
         self.assertFalse(
             validate_answer(json.dumps(wrong), self.expected)["esquema_valido"]
         )
 
     # Comprueba que un fallo cuenta como caso y que coste desconocido sigue siendo None.
     def test_unparseable_is_in_denominator(self):
-        # Registros de la partición o lote actual, conservados como una lista de diccionarios.
+        # Dos casos simulados: uno correcto y otro con error y respuesta no parseable.
         rows = [
             {
                 "valoracion": validate_answer(json.dumps(self.expected), self.expected),
@@ -86,68 +106,78 @@ class Contracts(unittest.TestCase):
                 "error": "TimeoutError",
             },
         ]
-        # Comprueba igualdad exacta con el resultado esperado para este contrato.
-        # Comprueba que el valor desconocido se mantiene como None.
+        # Resumen calculado igual que en scripts/resumir.py.
         out = summarize(rows)
+        # Los dos casos cuentan; solo uno acierta la categoría.
         self.assertEqual((out["casos"], out["categoria_correcta"]), (2, 1))
+        # Coste desconocido en los casos: el total sigue siendo None, no 0.
         self.assertIsNone(out["coste_usd"])
 
     # Verifica las cantidades y los hashes del experimento publicado.
     def test_splits_and_freeze(self):
-        # Comprueba igualdad exacta con el resultado esperado para este contrato.
-        # Exige que la propiedad comprobada sea verdadera.
+        # Cantidades publicadas: 240/30/30.
         self.assertEqual(
             validate_splits(), {"train": 240, "validacion": 30, "test": 30}
         )
+        # Los hashes actuales coinciden con config/experimento-congelado.json.
         self.assertTrue(assert_frozen())
 
     # Introduce una familia de train en una copia temporal de test y exige rechazo.
     def test_duplicate_family_is_rejected(self):
-        # Usa una carpeta temporal de pruebas para conservar intactos los datos y adaptadores reales.
+        # Carpeta temporal: los datos reales del curso no se modifican.
         with tempfile.TemporaryDirectory() as tmp:
+            # Recorre las tres particiones.
             for s in ("train", "validacion", "test"):
-                # Registros de la partición o lote actual, conservados como una lista de diccionarios.
+                # Copia de cada partición real.
                 rows = read_jsonl(ROOT / f"datos/{s}.jsonl")
+                # Solo en la copia de test se introduce una familia de train.
                 if s == "test":
+                    # Primer caso de test con la familia del primer grupo de train.
                     rows[0]["familia"] = "train-acceso-00"
-                # Guarda los registros del paso como JSONL, una fila por ejemplo y sin reparar respuestas.
+                # Escribe la copia (modificada en el caso de test) en la carpeta temporal.
                 write_jsonl(Path(tmp) / f"{s}.jsonl", rows)
-            # La prueba espera una excepción: rechazar esta entrada es el comportamiento correcto.
+            # La validación debe detectar la familia compartida y fallar.
             with self.assertRaisesRegex(ValueError, "Familia"):
+                # Valida la carpeta temporal, no la real.
                 validate_splits(tmp)
 
     # Comprueba que los ejemplos few-shot vienen de train y la consulta nueva queda al final.
     def test_fewshot_only_from_training(self):
+        # Conversación few-shot para una consulta inventada.
         msg = messages("CONSULTA NUEVA", True)
-        # Comprueba igualdad exacta con el resultado esperado para este contrato.
+        # La consulta nueva es el último mensaje.
         self.assertEqual(msg[-1]["content"], "CONSULTA NUEVA")
+        # System + 4 pares user/assistant + consulta = 10 mensajes.
         self.assertEqual(len(msg), 10)
+        # Todas las incidencias de train, para comprobar el origen de los ejemplos.
         training = {r["incidencia"] for r in read_jsonl(ROOT / "datos/train.jsonl")}
-        # Exige que la propiedad comprobada sea verdadera.
+        # Todas las incidencias de ejemplo (turnos user intermedios) proceden de train.
         self.assertTrue(
             all(m["content"] in training for m in msg[1:-1] if m["role"] == "user")
         )
 
     # Comprueba que convertir formato conserva la incidencia y la respuesta objetivo.
     def test_gemini_conversion_preserves_labels(self):
-        # Un ejemplo: ID/metadatos para nosotros e incidencia/objetivo para la tarea.
-        # Evidencia de un caso con entrada, objetivo, respuesta original, fecha y valoración.
+        # Primer caso de test y su versión convertida al formato Gemini.
         row = read_jsonl(ROOT / "datos/test.jsonl")[0]
+        # Registro con systemInstruction y contents.
         record = gemini_record(row)
-        # Comprueba igualdad exacta con el resultado esperado para este contrato.
+        # El turno user conserva la incidencia original.
         self.assertEqual(record["contents"][0]["parts"][0]["text"], row["incidencia"])
-        # Comprueba igualdad exacta con el resultado esperado para este contrato.
+        # El turno model conserva la respuesta objetivo exacta.
         self.assertEqual(
             json.loads(record["contents"][1]["parts"][0]["text"]), row["objetivo"]
         )
-        # Comprueba que no se añadió un campo/valor ajeno al recorrido permitido.
+        # El ID no viaja en el registro convertido.
         self.assertNotIn("id", record)
 
     # Relaciona cada línea convertida con el ID de su ejemplo original.
     def test_gemini_id_mapping(self):
-        ids = json.loads((ROOT / "datos/gemini/ids.json").read_text())
+        # Correspondencia entre líneas e IDs guardada por convertir_gemini.py.
+        ids = json.loads((ROOT / "datos/gemini/ids.json").read_text(encoding="utf-8"))
+        # Compara cada partición.
         for s in ("train", "validacion", "test"):
-            # Comprueba igualdad exacta con el resultado esperado para este contrato.
+            # El orden de IDs coincide con el de cada partición original.
             self.assertEqual(
                 ids[s]["ids_por_linea"],
                 [r["id"] for r in read_jsonl(ROOT / f"datos/{s}.jsonl")],
@@ -155,54 +185,157 @@ class Contracts(unittest.TestCase):
 
     # Exige detenerse antes de crear cliente Google cuando falta el proyecto explícito.
     def test_missing_project_prevents_client(self):
-        # Sustituye dependencias/configuración durante la prueba y restaura sus valores al terminar.
+        # Entorno vacío y load_config simulado: no se lee el .env real.
         with (
             patch.dict("os.environ", {}, clear=True),
             patch("curso.remote.load_config"),
         ):
-            # La prueba espera una excepción: rechazar esta entrada es el comportamiento correcto.
+            # Sin GOOGLE_CLOUD_PROJECT debe fallar con un mensaje que menciona el laboratorio.
             with self.assertRaisesRegex(ValueError, "laboratorio"):
+                # Debe fallar antes de crear el cliente.
                 google_client()
 
     # Comprueba ubicación y ausencia del test en la especificación de tuning.
     def test_job_spec_never_includes_test(self):
         # Especificación del trabajo de tuning; describirla no equivale a ejecutarlo.
         spec = job_spec("curso-demo", "bucket-demo")
-        # Comprueba que no se añadió un campo/valor ajeno al recorrido permitido.
-        # Comprueba igualdad exacta con el resultado esperado para este contrato.
+        # Ninguna ruta de la especificación menciona test.
         self.assertNotIn("test", json.dumps(spec))
+        # El tuning se crea en europe-west4.
         self.assertEqual(spec["location"], "europe-west4")
-        # La prueba espera una excepción: rechazar esta entrada es el comportamiento correcto.
+        # Sin proyecto, la especificación no se construye.
         with self.assertRaises(ValueError):
+            # Proyecto ausente.
             job_spec(None, "bucket")
 
     # Falla si importar el módulo intentara enviar una petición HTTP.
     def test_imports_do_not_connect(self):
+        # importlib permite volver a ejecutar la importación de un módulo.
         import importlib
 
-        # Sustituye dependencias/configuración durante la prueba y restaura sus valores al terminar.
+        # Si importar intentara enviar una petición, este requests.post simulado fallaría.
         with patch("requests.post", side_effect=AssertionError("network")):
+            # Vuelve a importar curso.remote con la red bloqueada.
             importlib.reload(sys.modules["curso.remote"])
 
     # Prueba que una salida vacía se acepta y un adaptador previo permanece intacto.
     def test_training_does_not_overwrite_existing_artifacts(self):
-        # Usa una carpeta temporal de pruebas para conservar intactos los datos y adaptadores reales.
+        # Carpeta temporal: los adaptadores reales no se tocan.
         with tempfile.TemporaryDirectory() as tmp:
-            # Ruta concreta de lectura/escritura; el código utiliza Path para gestionar carpetas y archivos.
-            # Crea la carpeta necesaria; parents/exist_ok controlan subcarpetas y rutas ya existentes.
+            # Carpeta de adaptador vacía dentro del directorio temporal.
             path = Path(tmp) / "adapter"
+            # Crea la carpeta vacía.
             path.mkdir()
-            # Comprueba igualdad exacta con el resultado esperado para este contrato.
+            # Una carpeta vacía es una salida válida.
             self.assertEqual(training_output(path), path.resolve())
+            # Simula un adaptador ya entrenado dentro de la carpeta.
             artifact = path / "adapter_model.safetensors"
+            # Contenido conocido para comprobar después que no cambió.
             artifact.write_bytes(b"preserve")
-            # La prueba espera una excepción: rechazar esta entrada es el comportamiento correcto.
+            # Con contenido dentro, se rechaza.
             with self.assertRaisesRegex(ValueError, "Salida no vacía"):
+                # Segundo intento sobre la misma carpeta.
                 training_output(path)
-            # Comprueba igualdad exacta con el resultado esperado para este contrato.
+            # El archivo previo sigue intacto.
             self.assertEqual(artifact.read_bytes(), b"preserve")
+
+    # write_jsonl escribe UTF-8 con saltos de línea LF en cualquier sistema operativo.
+    def test_jsonl_is_utf8_with_lf(self):
+        # Carpeta temporal: no toca los datos reales del curso.
+        with tempfile.TemporaryDirectory() as tmp:
+            # Archivo de prueba con dos registros que contienen tildes y eñes.
+            path = Path(tmp) / "filas.jsonl"
+            # Escribe los dos registros.
+            write_jsonl(path, [{"texto": "contraseña"}, {"texto": "matrícula"}])
+            # Bytes exactos del archivo, tal como se calcularía su hash.
+            data = path.read_bytes()
+            # La eñe se guarda en UTF-8 y no aparece ningún retorno de carro (\r) de Windows.
+            self.assertIn("contraseña".encode("utf-8"), data)
+            # \r no aparece: los saltos de línea son LF también en Windows.
+            self.assertNotIn(b"\r", data)
+            # Leer el archivo devuelve exactamente el texto escrito.
+            self.assertEqual(read_jsonl(path)[1]["texto"], "matrícula")
+
+    # demo.py termina con un mensaje de ayuda ante un caso inexistente, un --adaptador
+    # fuera de Qwen o una --salida que ya existe, sin llegar a consultar ningún modelo.
+    def test_demo_rejects_bad_arguments_before_calling_a_model(self):
+        # Carpeta temporal con un resultado anterior que no debe sobrescribirse.
+        with tempfile.TemporaryDirectory() as tmp:
+            # Archivo que simula un resultado anterior.
+            previous = Path(tmp) / "anterior.json"
+            # Contenido conocido para comprobar después que no cambió.
+            previous.write_text("{}", encoding="utf-8")
+            # Tres líneas de comando incorrectas, como las escribiría un alumno en la terminal.
+            for argv in (
+                ["demo", "--proveedor", "qwen", "--caso", "DE-99"],
+                ["demo", "--proveedor", "anthropic", "--adaptador", "modelos/otro"],
+                ["demo", "--proveedor", "anthropic", "--salida", str(previous)],
+            ):
+                # argparse llama a sys.exit (SystemExit) y escribe la ayuda en stderr, que aquí se descarta.
+                with (
+                    patch("sys.argv", argv),
+                    patch("curso.remote.chat") as call,
+                    patch("sys.stderr", io.StringIO()),
+                    self.assertRaises(SystemExit),
+                ):
+                    # Ejecuta main() con esos argumentos.
+                    demo_main()
+                # Ninguna consulta llegó al proveedor.
+                call.assert_not_called()
+            # El resultado anterior sigue intacto.
+            self.assertEqual(previous.read_text(encoding="utf-8"), "{}")
+
+    # qwen_lora sin adaptador entrenado se detiene antes de cargar Qwen y sin crear resultados.
+    def test_lora_evaluation_requires_trained_adapter(self):
+        # Carpeta temporal donde el adaptador no existe.
+        with tempfile.TemporaryDirectory() as tmp:
+            # Ruta del archivo de resultados que no debe llegar a crearse.
+            output = Path(tmp) / "qwen_lora.jsonl"
+            # Argumentos con una carpeta de adaptador inexistente.
+            argv = [
+                "evaluar_qwen",
+                "--condicion",
+                "qwen_lora",
+                "--adaptador",
+                str(Path(tmp) / "falta"),
+                "--salida",
+                str(output),
+            ]
+            # load_qwen simulado: si se llamara, la prueba lo detectaría.
+            with (
+                patch("sys.argv", argv),
+                patch("curso.qwen.load_qwen") as load,
+                patch("sys.stderr", io.StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                # Ejecuta main() con esos argumentos.
+                evaluar_qwen_main()
+            # No se cargó el modelo ni se escribió el archivo de resultados.
+            load.assert_not_called()
+            # El archivo de resultados no se creó.
+            self.assertFalse(output.exists())
+
+    # Publicar comprueba el adaptador local antes de crear nada en Hugging Face.
+    def test_publish_checks_adapter_before_creating_repo(self):
+        # Carpeta temporal vacía: le faltan adapter_config.json y adapter_model.safetensors.
+        with tempfile.TemporaryDirectory() as tmp:
+            # HfApi simulado: si se creara el cliente del Hub, la prueba lo detectaría.
+            with (
+                patch(
+                    "sys.argv",
+                    ["publicar", "--repo", "usuario/nuevo", "--adaptador", tmp],
+                ),
+                patch("huggingface_hub.HfApi") as api,
+                patch("sys.stderr", io.StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                # Ejecuta main() con esos argumentos.
+                publish_main()
+            # No se llegó a crear el cliente, así que tampoco ningún repositorio.
+            api.assert_not_called()
 
 
 # Punto de entrada: ejecutar como script llama main; importar el módulo solo define sus funciones.
 if __name__ == "__main__":
+    # Ejecuta las pruebas de este archivo.
     unittest.main()
