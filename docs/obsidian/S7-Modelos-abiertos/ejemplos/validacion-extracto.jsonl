@@ -1,0 +1,1 @@
+{"id": "VA-01", "familia": "validacion-00", "incidencia": "El inicio de sesión me devuelve credenciales incorrectas y no puedo entrar.", "objetivo": {"categoria": "acceso", "prioridad": "media", "respuesta": "Indica el error de acceso y el paso en que aparece, sin compartir tu contraseña."}}

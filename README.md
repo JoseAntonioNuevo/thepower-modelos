@@ -154,6 +154,7 @@ notebooks/                S7-LoRA.ipynb y S8-Gemini-Claude.ipynb, por etapas
 tests/                    Contratos de datos, validador, HTTP, proveedores y API local
 docs/                     Guía del código, preguntas frecuentes, protocolo, ejercicios,
                           modelos remotos, resultados de referencia y publicación
+docs/obsidian/            Apuntes de S7 y S8 en orden de clase, con diagramas Mermaid
 ```
 
 No vienen en Git, y es normal que no existan en una copia nueva: pesos del
@@ -474,6 +475,7 @@ comprueba lo que te diga en el código, que es la fuente de verdad.
 
 | Documento | Para qué sirve |
 |---|---|
+| [docs/obsidian/](docs/obsidian/Inicio.md) | Apuntes de S7 y S8 en orden de clase, con diagramas; se abren como vault de Obsidian o se leen en GitHub |
 | [docs/preguntas-frecuentes.md](docs/preguntas-frecuentes.md) | Cómo se hace cada cosa, con comandos y dónde mirar en el código |
 | [docs/guia-codigo.md](docs/guia-codigo.md) | Orden de lectura del código, de un ejemplo de datos al informe |
 | [docs/experimento.md](docs/experimento.md) | Protocolo: datos, condiciones, métricas y reglas que no se rompen |

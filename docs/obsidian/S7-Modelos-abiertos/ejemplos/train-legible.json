@@ -1,0 +1,42 @@
+[
+  {
+    "id": "TR-001",
+    "familia": "train-acceso-00",
+    "incidencia": "No puedo iniciar sesión con mi cuenta del curso.",
+    "objetivo": {
+      "categoria": "acceso",
+      "prioridad": "media",
+      "respuesta": "Indica el error de acceso y el paso en que aparece, sin compartir tu contraseña."
+    }
+  },
+  {
+    "id": "TR-061",
+    "familia": "train-facturacion-00",
+    "incidencia": "Tengo dos cargos del mismo curso en mi tarjeta.",
+    "objetivo": {
+      "categoria": "facturacion",
+      "prioridad": "media",
+      "respuesta": "Indica el concepto y la fecha del pago para revisar la incidencia de facturación."
+    }
+  },
+  {
+    "id": "TR-121",
+    "familia": "train-tecnico-00",
+    "incidencia": "El vídeo de la lección no se reproduce y no puedo estudiar.",
+    "objetivo": {
+      "categoria": "tecnico",
+      "prioridad": "media",
+      "respuesta": "Indica la función afectada y el mensaje de error para revisar el problema."
+    }
+  },
+  {
+    "id": "TR-181",
+    "familia": "train-consulta-00",
+    "incidencia": "¿A qué hora comienza la siguiente clase?",
+    "objetivo": {
+      "categoria": "consulta",
+      "prioridad": "baja",
+      "respuesta": "Indica qué información necesitas para poder ayudarte con la consulta."
+    }
+  }
+]

@@ -68,6 +68,7 @@ claves.
 | Duda del alumno | Archivos y símbolos que debes inspeccionar |
 |---|---|
 | Sobre qué va S7 o S8 y qué hay en el repo | `README.md`, sección «Contexto de las clases» de este archivo |
+| Qué se explicó en clase, en orden y con diagramas | `docs/obsidian/` (guías `S7-Modelos-abiertos/00-Guia-S7.md` y `S8-Modelos-cerrados/00-Guia-S8.md`) |
 | Cómo se hace una tarea concreta | `docs/preguntas-frecuentes.md` y el script que cite |
 | Qué instalar y cómo arrancar | `README.md`, `requirements.in`, `requirements-training.in`, sus `.lock`, `.env.example`, `scripts/preflight.py:main` |
 | Dónde están los ejemplos y qué campos tienen | `datos/train.jsonl`, `datos/validacion.jsonl`, `datos/test.jsonl`, `datos/desarrollo.jsonl`; `scripts/preparar_datos.py:TRAIN`, `target`, `main` |
