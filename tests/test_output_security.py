@@ -49,8 +49,9 @@ from curso.common import (
 # Límite de transporte y lectores acotados de curso/http.py.
 from curso.http import MAX_RESPONSE_BYTES, bounded_json, joined_text, model_ids
 
-# Adaptadores de LM Studio, OpenRouter y Vertex AI.
-from curso.remote import chat_local, chat_openrouter, chat_google
+# Adaptadores de LM Studio, OpenRouter y Vertex AI, y la búsqueda en el catálogo de
+# OpenRouter, cuya caché se vacía entre pruebas.
+from curso.remote import chat_local, chat_openrouter, chat_google, openrouter_model
 
 # Funciones de los scripts que se ejecutan dentro de las pruebas.
 from resumir import csv_text, main as summarize_main
@@ -242,10 +243,17 @@ class OutputSecurity(unittest.TestCase):
                 self.assertFalse(post.call_args.kwargs["allow_redirects"])
         # Respuesta de OpenRouter con el mismo texto.
         value = response(envelope)
-        # Clave ficticia y red simulada.
+        # Catálogo simulado con la ficha mínima del modelo demo.
+        listing = response({"data": [{"id": "demo"}]})
+        # Vacía la caché del catálogo antes y después para no mezclar pruebas.
+        openrouter_model.cache_clear()
+        # addCleanup ejecuta la limpieza al terminar la prueba, aunque falle.
+        self.addCleanup(openrouter_model.cache_clear)
+        # Clave ficticia y red simulada (catálogo y consulta).
         with (
             patch("curso.remote.load_config"),
             patch.dict("os.environ", {"OPENROUTER_API_KEY": "dummy"}),
+            patch("requests.get", return_value=listing),
             patch("requests.post", return_value=value) as post,
         ):
             # El texto llega exactamente igual.

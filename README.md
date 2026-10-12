@@ -279,6 +279,11 @@ separado. Los runners rechazan archivos existentes. [Protocolo](docs/experimento
 
 ### 1. Elegir proveedor y modelo en `.env`
 
+El código no está atado a ningún proveedor. Tres líneas de `.env` deciden a
+quién se pregunta: **por dónde** (`LLM_PROVIDER`), **qué modelo** (`LLM_MODEL`,
+con el formato de ID de esa ruta) y **la clave** de esa ruta. Rellena solo la
+clave que vayas a usar; `.env` nunca se sube a Git.
+
 ```bash
 # .env — la ruta del curso
 LLM_PROVIDER=anthropic
@@ -286,22 +291,69 @@ LLM_MODEL=claude-haiku-5-5
 ANTHROPIC_API_KEY=…            # tu clave; nunca en Git, capturas ni chats
 ```
 
-| Para usar… | `LLM_PROVIDER` | Clave |
-|---|---|---|
-| Claude (Messages API, SDK oficial) | `anthropic` | `ANTHROPIC_API_KEY` |
-| OpenAI | `openai` | `OPENAI_API_KEY` |
-| Cualquier modelo de OpenRouter | `openrouter` | `OPENROUTER_API_KEY` |
-| Groq, Mistral, DeepSeek, Ollama, vLLM… | `compatible` | `COMPAT_BASE_URL` y `COMPAT_API_KEY` |
-| Gemini con clave | `gemini` | `GEMINI_API_KEY` |
-| LM Studio | `local` | Ninguna |
-| Gemini base o ajustado en Google Cloud | `google` | `GOOGLE_CLOUD_PROJECT` + credenciales |
+| Para usar… | `LLM_PROVIDER` | Qué poner en `.env` | Ejemplo de `LLM_MODEL` | Coste |
+|---|---|---|---|---|
+| Claude por la API de Anthropic (ruta del curso) | `anthropic` | `ANTHROPIC_API_KEY` | `claude-haiku-5-5` | Tarifa de `LLM_PRECIO_*` |
+| GPT por la API de OpenAI | `openai` | `OPENAI_API_KEY` | El ID que muestre tu cuenta | Tarifa de `LLM_PRECIO_*` |
+| **Cualquier modelo de OpenRouter**: Claude, GPT, Gemini, GLM, Kimi, DeepSeek, Qwen, Llama, Grok… | `openrouter` | `OPENROUTER_API_KEY` | `z-ai/glm-5.3` (ID exacto de su catálogo) | Lo informa OpenRouter |
+| Gemini con clave de Google AI Studio | `gemini` | `GEMINI_API_KEY` | `gemini-3.1-flash-lite` | Tarifa de `LLM_PRECIO_*` |
+| Groq, Mistral, DeepSeek, Together… | `compatible` | `COMPAT_BASE_URL` (https) y `COMPAT_API_KEY` | El ID de ese servidor | Tarifa de `LLM_PRECIO_*` |
+| Ollama o vLLM en tu equipo | `compatible` | `COMPAT_BASE_URL=http://localhost:11434/v1` | `qwen3:0.6b` | No medido (`null`) |
+| LM Studio | `local` | Nada | Lo descubre solo | No medido (`null`) |
+| Gemini base o ajustado en Google Cloud | `google` | `GOOGLE_CLOUD_PROJECT` y login con `gcloud` (no usa clave) | `gemini-3.1-flash-lite` o el recurso ajustado | No medido (`null`); estímalo con la tarifa de Google |
 
-Cada ruta tiene su propio formato de ID de modelo y algunos parámetros propios
-(temperatura admitida, razonamiento, nombre del límite de salida). Se ajustan
-con `LLM_TEMPERATURE` y `LLM_EXTRA_BODY` sin tocar el código. Claude Haiku 5.5,
-por ejemplo, no admite una temperatura distinta de la predeterminada, y el
-repo le pide la respuesta sin razonamiento extendido para respetar el límite de
-180 tokens. [Todos los detalles](docs/modelos-remotos.md).
+Para cambiar de proveedor:
+
+1. En `.env`, cambia `LLM_PROVIDER` y `LLM_MODEL` y pon la clave de esa ruta.
+2. Ajusta la tarifa: `LLM_PRECIO_ENTRADA_USD_MTOK` y `LLM_PRECIO_SALIDA_USD_MTOK`
+   (USD por millón de tokens) con el precio de tu modelo, o déjalas vacías y el
+   coste quedará `null` (no medido). Si dejas la tarifa de Claude con otro
+   modelo, el coste saldrá mal. OpenRouter no la necesita: informa el importe.
+3. `python scripts/preflight.py` muestra la ruta, el modelo y si encuentra la
+   clave, sin enseñarla y sin llamar a ningún modelo.
+4. `python scripts/demo.py --caso DE-04` hace una consulta de prueba (de pago).
+
+Algunos ejemplos de `.env`:
+
+```bash
+# GLM, Kimi, GPT o cualquier otro modelo por OpenRouter: cambia solo LLM_MODEL
+LLM_PROVIDER=openrouter
+LLM_MODEL=z-ai/glm-5.3            # o moonshotai/kimi-k3, openai/gpt-6-luna, anthropic/claude-haiku-5.5…
+OPENROUTER_API_KEY=…
+
+# Gemini con una clave de Google AI Studio
+LLM_PROVIDER=gemini
+LLM_MODEL=gemini-3.1-flash-lite
+GEMINI_API_KEY=…
+```
+
+**OpenRouter** da acceso a cientos de modelos con una sola clave. Copia el ID
+exacto de [openrouter.ai/models](https://openrouter.ai/models): tiene la forma
+`proveedor/modelo` y no siempre coincide con el de la API directa
+(`anthropic/claude-haiku-5.5` lleva punto; en Anthropic es `claude-haiku-5-5`).
+Cada modelo admite parámetros distintos, así que antes de consultar el repo lee
+el catálogo público de OpenRouter (gratis, sin clave) y envía solo lo que ese
+modelo acepta: temperatura 0 si la admite; el razonamiento apagado si se puede
+apagar, o en su nivel más bajo si el modelo siempre razona (en Gemini, el
+mínimo); y el límite de 180 tokens con el nombre que entienda. Un ID que no
+existe se rechaza antes de gastar nada. Lo enviado queda en
+`parametros_solicitados`: anótalo en tu entrega. El 12 de octubre de 2026 el
+caso `DE-04` funcionó así, sin tocar nada más, con Claude Haiku 5.5, GPT-6
+Luna, GPT-6.1 Sol, GLM-5.3, Kimi K3, Gemini 3.1 Flash-Lite, DeepSeek V4 Flash,
+Qwen3.8 Flash, Llama 4 Maverick y Grok 4.7. El catálogo cambia: comprueba tu
+modelo con `demo.py` antes de evaluar.
+
+**Google** ofrece dos caminos distintos. Con una clave de Google AI Studio usas
+`gemini`: sirve para consultar Gemini con `demo.py` y con las condiciones
+`claude_prompt` y `remoto_basico`. El ajuste gestionado y las condiciones
+`gemini_base` y `gemini_ajustado` necesitan Google Cloud (`google`): un proyecto
+del laboratorio y `gcloud auth application-default login`; ahí no se usa clave.
+
+Cada ruta tiene su propio formato de ID y algunos parámetros propios
+(temperatura admitida, razonamiento, nombre del límite de salida). El repo ya
+los resuelve para el modelo del curso y para OpenRouter; si otro modelo rechaza
+un parámetro, ajústalo con `LLM_TEMPERATURE` y `LLM_EXTRA_BODY` sin tocar el
+código. [Todos los detalles](docs/modelos-remotos.md).
 
 ### 2. Comprobar y hacer la primera consulta
 
@@ -309,14 +361,29 @@ repo le pide la respuesta sin razonamiento extendido para respetar el límite de
 python scripts/preflight.py                # ruta, modelo y qué claves hay, sin mostrarlas
 python scripts/demo.py --caso DE-04            # ruta de .env
 python scripts/demo.py --caso DE-04 --fewshot  # con los cuatro ejemplos fijados
-python scripts/demo.py --proveedor openrouter --modelo google/gemini-3.1-flash-lite --caso DE-04
+python scripts/demo.py --proveedor openrouter --modelo moonshotai/kimi-k3 --caso DE-04
 ```
 
-Cada consulta guarda la respuesta original, la ruta, el modelo devuelto, el
-proveedor que respondió, el identificador de la petición, el motivo de parada,
-los tokens, la latencia y el coste. El coste sale de `usage.cost` cuando la ruta
-lo informa (OpenRouter) o de la tarifa que declares en `LLM_PRECIO_*`; sin
-tarifa queda `null`, que significa no medido, no gratis.
+`--proveedor` y `--modelo` prueban otra ruta sin tocar `.env` (`LLM_MODEL`
+solo se aplica al proveedor de `LLM_PROVIDER`, así que con otro proveedor
+indica `--modelo`). Cada consulta guarda la respuesta original, la ruta, el
+modelo devuelto, el proveedor que respondió, el identificador de la petición,
+el motivo de parada, los tokens, la latencia y el coste. El coste sale de
+`usage.cost` cuando la ruta lo informa (OpenRouter) o de la tarifa que declares
+en `LLM_PRECIO_*`; sin tarifa queda `null`, que significa no medido, no gratis.
+
+Si algo falla:
+
+| Mensaje | Qué hacer |
+|---|---|
+| `Falta …_API_KEY` | Pon la clave de esa ruta en `.env`. |
+| `… no está en el catálogo de OpenRouter` | Copia el ID exacto de openrouter.ai/models. |
+| `… HTTP 401` o `403` | Clave incorrecta o sin acceso a ese modelo. |
+| `… HTTP 402` o `429` | Sin saldo o con límite de uso; no se reintenta solo. |
+| `… HTTP 400`, o `404` en OpenRouter | El modelo no admite un parámetro enviado: revisa `LLM_TEMPERATURE` y `LLM_EXTRA_BODY`. |
+| `finish_reason: length` y JSON cortado | El modelo gastó los 180 tokens (a menudo razonando). Cuenta como fallo; elige otro modelo o declara un experimento distinto. |
+
+Más casos en las [preguntas frecuentes](docs/preguntas-frecuentes.md).
 
 ### 3. Evaluar con el mismo test de S7
 

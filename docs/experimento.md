@@ -53,7 +53,10 @@ propios y el registro los conserva:
 - Gemini (Gemini API y Google Cloud): `systemInstruction`, temperatura 0 y
   `thinkingLevel` MINIMAL, iguales para base y ajustado.
 - Chat Completions (OpenAI, OpenRouter y APIs compatibles): mensaje `system`;
-  temperatura 0 salvo en OpenAI, cuyos modelos de razonamiento la rechazan.
+  temperatura 0 salvo en OpenAI, cuyos modelos de razonamiento la rechazan. En
+  OpenRouter, temperatura y razonamiento dependen de lo que admita cada modelo
+  según su catálogo (`curso/remote.py:openrouter_settings`); lo enviado queda en
+  `parametros_solicitados`.
 
 Los ajustes de `LLM_TEMPERATURE` y `LLM_EXTRA_BODY` cambian el experimento y se
 declaran con los resultados. Cada registro guarda ruta, modelo devuelto,

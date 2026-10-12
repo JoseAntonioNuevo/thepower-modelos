@@ -19,6 +19,9 @@ import os
 # Mide duración y prepara fechas; perf_counter/monotonic sirven para intervalos, no fechas del calendario.
 import time
 
+# lru_cache recuerda el resultado de una función para no repetir una descarga con los mismos argumentos.
+from functools import lru_cache
+
 # Codifica el ID del modelo dentro de una URL y analiza URLs base configuradas en .env.
 from urllib.parse import quote, urlsplit
 
@@ -535,8 +538,108 @@ def chat_openai(incident, model, fewshot=False):
     )
 
 
+# Catálogo público de OpenRouter: para cada modelo, qué parámetros admite y cómo razona.
+OPENROUTER_CATALOGO = "https://openrouter.ai/api/v1/models"
+# El catálogo completo ronda 1 MiB y crece con cada modelo nuevo: solo esta lectura
+# admite hasta 8 MiB; el resto de respuestas HTTP mantiene el límite general.
+MAX_CATALOGO_BYTES = 8 * 1024 * 1024
+
+
+# Busca un modelo en el catálogo de OpenRouter y devuelve su ficha (un diccionario).
+# Es una lectura gratuita, sin clave ni inferencia. lru_cache guarda el resultado por
+# modelo: un lote de 30 casos descarga el catálogo una sola vez.
+@lru_cache(maxsize=None)
+def openrouter_model(model):
+    # Cliente HTTP; las peticiones se realizan al llamarlo, no por el simple import.
+    import requests
+
+    # Misma lectura acotada que el resto de rutas: streaming, sin redirecciones y con timeout.
+    response = requests.get(
+        OPENROUTER_CATALOGO,
+        # (10, 60): hasta 10 s para conectar y 60 s esperando datos.
+        timeout=(10, 60),
+        # stream=True: el cuerpo se lee después por bloques con límite de tamaño.
+        stream=True,
+        # Una redirección se trata como error, no se sigue.
+        allow_redirects=False,
+    )
+    # Comprueba el estado HTTP antes de leer el cuerpo.
+    if response.status_code != 200:
+        # Libera la conexión antes de detenerse.
+        response.close()
+        # Sin catálogo no se sabe qué parámetros admite el modelo: no se envía la consulta.
+        raise RuntimeError(f"Catálogo de OpenRouter HTTP {response.status_code}")
+    # JSON del catálogo, leído con el límite ampliado para este archivo.
+    data = bounded_json(response, max_bytes=MAX_CATALOGO_BYTES)
+    # Lista de modelos; cualquier otra forma se rechaza.
+    entries = data.get("data")
+    # El catálogo debe traer una lista en el campo data.
+    if not isinstance(entries, list):
+        # Detiene el proceso: formato inesperado.
+        raise ValueError("Catálogo de OpenRouter mal formado")
+    # Diccionario id → ficha, ignorando entradas sin un id de texto.
+    catalog = {
+        entry["id"]: entry
+        for entry in entries
+        if isinstance(entry, dict) and isinstance(entry.get("id"), str)
+    }
+    # ID exacto o, si lleva un sufijo de enrutado (:nitro, :floor…), el modelo sin sufijo.
+    entry = catalog.get(model) or catalog.get(model.split(":")[0])
+    # ID inexistente: se avisa antes de gastar una llamada.
+    if entry is None:
+        # Mensaje con el ID y dónde copiar el correcto.
+        raise ValueError(
+            f"{model!r} no está en el catálogo de OpenRouter; "
+            "copia el ID exacto de https://openrouter.ai/models"
+        )
+    # Ficha del modelo: supported_parameters, reasoning, precios…
+    return entry
+
+
+# Traduce la ficha del catálogo al protocolo del curso, enviando solo lo que el modelo admite.
+# Devuelve (temperatura, nombre del límite de salida, configuración de razonamiento).
+def openrouter_settings(model, entry):
+    # Parámetros que acepta este modelo, por ejemplo temperature, max_tokens o reasoning.
+    supported = set(entry.get("supported_parameters") or [])
+    # Temperatura 0 como el resto de rutas; None (no se envía) si el modelo no la admite,
+    # como Claude Haiku 5.5 o los GPT de razonamiento.
+    temperature = 0 if "temperature" in supported else None
+    # Límite de 180 tokens con el nombre que acepte el modelo; max_tokens es el habitual.
+    if "max_tokens" in supported or "max_completion_tokens" not in supported:
+        # Nombre estándar de Chat Completions.
+        token_field = "max_tokens"
+    else:
+        # Algunos modelos de OpenAI solo aceptan este nombre.
+        token_field = "max_completion_tokens"
+    # Datos de razonamiento del catálogo: si es obligatorio y qué niveles admite.
+    info = entry.get("reasoning") or {}
+    # Modelo sin razonamiento configurable (por ejemplo, Llama): no se envía nada.
+    if "reasoning" not in supported:
+        # Sin campo reasoning en la petición.
+        reasoning = None
+    # Gemini: nivel mínimo, igual que thinkingLevel MINIMAL en las rutas gemini y google.
+    elif model.startswith("google/"):
+        # OpenRouter lo traduce al nivel más bajo que admita ese Gemini.
+        reasoning = {"effort": "minimal"}
+    # Razonamiento opcional (Claude Haiku, Kimi, muchos GPT, DeepSeek, Qwen…): se desactiva
+    # para que los 180 tokens se dediquen a la respuesta, como en la ruta directa de Anthropic.
+    elif not info.get("mandatory"):
+        # enabled=False apaga el razonamiento.
+        reasoning = {"enabled": False}
+    # Razonamiento obligatorio (algunos GLM, Grok o GPT): no se puede apagar; se pide el
+    # nivel más bajo. supported_efforts va de mayor a menor, así que el último es el mínimo.
+    else:
+        # Niveles admitidos, sin "none" (desactivar no está permitido aquí).
+        efforts = [e for e in info.get("supported_efforts") or [] if e and e != "none"]
+        # Sin lista: "minimal", que OpenRouter ajusta al nivel admitido más cercano.
+        reasoning = {"effort": efforts[-1] if efforts else "minimal"}
+    # Tupla (temperatura, nombre del límite, razonamiento) para chat_openrouter.
+    return temperature, token_field, reasoning
+
+
 # Envía una incidencia por OpenRouter y conserva respuesta y metadatos.
-# El modelo se elige explícitamente y las opciones del proveedor se registran.
+# Vale para cualquier modelo del catálogo (Claude, GPT, Gemini, GLM, Kimi, Qwen, Llama…):
+# la petición se adapta a lo que admite cada modelo y queda registrada en parametros_solicitados.
 def chat_openrouter(incident, model, fewshot=False):
     # Carga las variables necesarias justo antes de la petición, sin mostrarlas.
     load_config()
@@ -546,16 +649,17 @@ def chat_openrouter(incident, model, fewshot=False):
     if not key:
         # Mensaje con el nombre de la variable; nunca su valor.
         raise ValueError("Falta OPENROUTER_API_KEY")
-    # usage.include pide el importe; require_parameters evita proveedores que ignoren parámetros.
+    # Temperatura, límite y razonamiento que admite este modelo según el catálogo.
+    temperature, token_field, reasoning = openrouter_settings(
+        model, openrouter_model(model)
+    )
+    # usage.include pide el importe; require_parameters impide que un proveedor ignore en
+    # silencio un parámetro enviado (por eso solo se envían los que el modelo admite).
     defaults = {"usage": {"include": True}, "provider": {"require_parameters": True}}
-    # Razonamiento mínimo para Gemini y desactivado para Claude, como en el protocolo anterior.
-    if model.startswith("google/"):
-        # Gemini por OpenRouter: razonamiento al mínimo para dejar los 180 tokens a la respuesta.
-        defaults["reasoning"] = {"effort": "minimal"}
-    # Modelos de Anthropic por OpenRouter.
-    elif model.startswith("anthropic/"):
-        # Razonamiento desactivado, como en la ruta directa de Anthropic.
-        defaults["reasoning"] = {"enabled": False}
+    # Solo los modelos con razonamiento configurable reciben el campo reasoning.
+    if reasoning is not None:
+        # Desactivado, mínimo o el nivel más bajo admitido, según openrouter_settings.
+        defaults["reasoning"] = reasoning
     # Delega en el cliente Chat Completions común con los ajustes de OpenRouter.
     return chat_completions(
         incident,
@@ -565,7 +669,11 @@ def chat_openrouter(incident, model, fewshot=False):
         # Endpoint fijo de OpenRouter.
         base_url="https://openrouter.ai/api/v1",
         key=key,
-        # usage, provider y reasoning definidos arriba.
+        # max_tokens o max_completion_tokens, según el catálogo.
+        token_field=token_field,
+        # 0, o None (no se envía) si el modelo no la admite; LLM_TEMPERATURE puede cambiarla.
+        temperature=temperature,
+        # usage, provider y reasoning definidos arriba; LLM_EXTRA_BODY puede sustituirlos.
         defaults=defaults,
         # X-Title identifica la aplicación en el panel de OpenRouter.
         headers={"X-Title": "thePower S7 S8"},

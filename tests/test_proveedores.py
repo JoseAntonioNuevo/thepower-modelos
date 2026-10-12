@@ -43,7 +43,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from curso.common import MAX_NEW_TOKENS, basic_prompt
 
 # Funciones de curso/remote.py que se ponen a prueba.
-from curso.remote import CREDENCIALES, chat, require_credentials, route, vertex_host
+from curso.remote import (
+    CREDENCIALES,
+    chat,
+    openrouter_model,
+    require_credentials,
+    route,
+    vertex_host,
+)
 
 # main de evaluar_remotos.py, para ejecutar lotes simulados.
 from evaluar_remotos import main as evaluate_main
@@ -63,6 +70,12 @@ def response(data, status=200):
     value.iter_content.return_value = [json.dumps(data).encode()]
     # Respuesta simulada lista para pasarla al código del curso.
     return value
+
+
+# Catálogo de OpenRouter simulado: una respuesta HTTP con la lista data de fichas de modelo.
+def catalog(*entries):
+    # Misma forma que https://openrouter.ai/api/v1/models, solo con las fichas indicadas.
+    return response({"data": list(entries)})
 
 
 # Entorno aislado: sin .env real y solo con las variables que indica cada prueba.
@@ -323,14 +336,188 @@ class Providers(unittest.TestCase):
         priced = dict(envelope, usage={**envelope["usage"], "cost": 0.0002})
         # Clave ficticia de OpenRouter.
         load, env = environment(OPENROUTER_API_KEY="dummy")
-        # requests.post devuelve la respuesta con importe.
-        with load, env, patch("requests.post", return_value=response(priced)) as post:
+        # Vacía la caché del catálogo antes y después para no mezclar pruebas.
+        openrouter_model.cache_clear()
+        # addCleanup ejecuta la limpieza al terminar la prueba, aunque falle.
+        self.addCleanup(openrouter_model.cache_clear)
+        # requests.get devuelve el catálogo y requests.post la respuesta con importe.
+        with (
+            load,
+            env,
+            patch("requests.get", return_value=catalog({"id": "proveedor/modelo"})),
+            patch("requests.post", return_value=response(priced)) as post,
+        ):
             # Ruta openrouter con un modelo inventado.
             result = chat("incidencia", "openrouter", "proveedor/modelo")
         # Se pidió a OpenRouter que informe del importe.
         self.assertEqual(post.call_args.kwargs["json"]["usage"], {"include": True})
         # El coste registrado es el que informó OpenRouter.
         self.assertEqual(result["coste_usd"], 0.0002)
+
+    # OpenRouter sirve cualquier modelo: la petición se adapta a lo que admite cada uno
+    # según el catálogo (temperatura, nombre del límite y razonamiento).
+    def test_openrouter_adapts_request_to_catalog(self):
+        # Fichas inspiradas en el catálogo real: cada una cubre un caso distinto.
+        entries = [
+            # Claude Haiku 5.5: sin temperatura y con razonamiento que se puede apagar.
+            {
+                "id": "anthropic/claude-haiku-5.5",
+                "supported_parameters": ["max_tokens", "reasoning"],
+                "reasoning": {"mandatory": False},
+            },
+            # GLM: temperatura admitida y razonamiento obligatorio con tres niveles.
+            {
+                "id": "z-ai/glm-5.3",
+                "supported_parameters": ["max_tokens", "reasoning", "temperature"],
+                "reasoning": {
+                    "mandatory": True,
+                    "supported_efforts": ["max", "high", "low"],
+                },
+            },
+            # Llama: temperatura admitida y sin razonamiento configurable.
+            {
+                "id": "meta-llama/llama-4-maverick",
+                "supported_parameters": ["max_tokens", "temperature"],
+            },
+            # Gemini: razonamiento opcional; el curso pide siempre el nivel mínimo.
+            {
+                "id": "google/gemini-3.1-flash-lite",
+                "supported_parameters": ["max_tokens", "reasoning", "temperature"],
+                "reasoning": {"mandatory": False},
+            },
+            # Un GPT que solo acepta max_completion_tokens como límite de salida.
+            {
+                "id": "openai/gpt-chat",
+                "supported_parameters": ["max_completion_tokens"],
+            },
+        ]
+        # Respuesta Chat Completions simulada, común a todos los modelos.
+        envelope = {
+            "id": "gen-demo",
+            "model": "demo",
+            "choices": [{"message": {"content": RAW}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 200, "completion_tokens": 30, "cost": 0.0001},
+        }
+        # Lo que debe llegar a OpenRouter para cada modelo; ausente = no se envía.
+        expected = {
+            "anthropic/claude-haiku-5.5": {"reasoning": {"enabled": False}},
+            "z-ai/glm-5.3": {"temperature": 0, "reasoning": {"effort": "low"}},
+            "meta-llama/llama-4-maverick": {"temperature": 0},
+            "google/gemini-3.1-flash-lite": {
+                "temperature": 0,
+                "reasoning": {"effort": "minimal"},
+            },
+            "openai/gpt-chat": {},
+        }
+        # Vacía la caché del catálogo antes y después para no mezclar pruebas.
+        openrouter_model.cache_clear()
+        # addCleanup ejecuta la limpieza al terminar la prueba, aunque falle.
+        self.addCleanup(openrouter_model.cache_clear)
+        # Recorre cada modelo con su petición esperada.
+        for model, fields in expected.items():
+            # subTest identifica el modelo si una comprobación falla.
+            with self.subTest(model=model):
+                # Clave ficticia de OpenRouter.
+                load, env = environment(OPENROUTER_API_KEY="dummy")
+                # Catálogo y respuesta simulados: no hay red.
+                with (
+                    load,
+                    env,
+                    patch("requests.get", return_value=catalog(*entries)) as get,
+                    patch("requests.post", return_value=response(envelope)) as post,
+                ):
+                    # Consulta por la ruta openrouter con este modelo.
+                    result = chat("incidencia", "openrouter", model)
+                # Cuerpo JSON enviado a OpenRouter.
+                sent = post.call_args.kwargs["json"]
+                # El catálogo se leyó con streaming y sin seguir redirecciones.
+                self.assertTrue(get.call_args.kwargs["stream"])
+                # Una redirección no se sigue.
+                self.assertFalse(get.call_args.kwargs["allow_redirects"])
+                # Temperatura solo si el modelo la admite.
+                self.assertEqual(sent.get("temperature"), fields.get("temperature"))
+                # Razonamiento: apagado, mínimo, el nivel más bajo o ausente.
+                self.assertEqual(sent.get("reasoning"), fields.get("reasoning"))
+                # require_parameters se mantiene: OpenRouter no ignora parámetros en silencio.
+                self.assertEqual(sent["provider"], {"require_parameters": True})
+                # El límite de 180 tokens viaja con el nombre que admite el modelo.
+                field = (
+                    "max_completion_tokens"
+                    if model == "openai/gpt-chat"
+                    else "max_tokens"
+                )
+                # Valor del límite común del curso.
+                self.assertEqual(sent[field], MAX_NEW_TOKENS)
+                # Texto intacto.
+                self.assertEqual(result["respuesta_original"], RAW)
+        # Un sufijo de enrutado (:nitro) usa la ficha del modelo sin sufijo, y la caché
+        # evita descargar el catálogo de nuevo para el mismo modelo.
+        load, env = environment(OPENROUTER_API_KEY="dummy")
+        # Dos consultas seguidas al mismo modelo con sufijo.
+        with (
+            load,
+            env,
+            patch("requests.get", return_value=catalog(*entries)) as get,
+            patch("requests.post", return_value=response(envelope)) as post,
+        ):
+            # Primera consulta: descarga el catálogo.
+            chat("incidencia", "openrouter", "z-ai/glm-5.3:nitro")
+            # Segunda consulta: reutiliza la ficha guardada.
+            chat("incidencia", "openrouter", "z-ai/glm-5.3:nitro")
+        # Una sola descarga del catálogo para las dos consultas.
+        self.assertEqual(get.call_count, 1)
+        # El sufijo usa la ficha de GLM: razonamiento en su nivel más bajo.
+        self.assertEqual(post.call_args.kwargs["json"]["reasoning"], {"effort": "low"})
+        # Un ID que no existe se rechaza antes de gastar una llamada.
+        load, env = environment(OPENROUTER_API_KEY="dummy")
+        # Catálogo sin ese modelo; post no debe llamarse.
+        with (
+            load,
+            env,
+            patch("requests.get", return_value=catalog(*entries)),
+            patch("requests.post") as post,
+        ):
+            # Debe fallar con un mensaje que nombra el ID.
+            with self.assertRaisesRegex(ValueError, "no está en el catálogo"):
+                # Modelo inexistente.
+                chat("incidencia", "openrouter", "z-ai/glm-inventado")
+        # No se envió ninguna consulta de pago.
+        post.assert_not_called()
+        # evaluar_remotos.py comprueba el ID antes del lote: ni llamadas ni archivo.
+        with tempfile.TemporaryDirectory() as tmp:
+            # Ruta del archivo de resultados que no debe crearse.
+            path = Path(tmp) / "remoto.jsonl"
+            # Clave ficticia de OpenRouter.
+            load, env = environment(OPENROUTER_API_KEY="dummy")
+            # Lote remoto_basico con un ID inexistente.
+            with (
+                load,
+                env,
+                patch(
+                    "sys.argv",
+                    [
+                        "evaluar",
+                        "--condicion",
+                        "remoto_basico",
+                        "--proveedor",
+                        "openrouter",
+                        "--modelo",
+                        "z-ai/glm-inventado",
+                        "--salida",
+                        str(path),
+                    ],
+                ),
+                patch("requests.get", return_value=catalog(*entries)),
+                patch("evaluar_remotos.chat") as call,
+                patch("sys.stderr", io.StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                # Debe terminar con un error de uso.
+                evaluate_main()
+            # Ninguna consulta.
+            call.assert_not_called()
+            # Ningún archivo.
+            self.assertFalse(path.exists())
 
     # Gemini API con clave: contents user/model, thinking mínimo y bloques thought excluidos.
     def test_gemini_api_payload_and_reply(self):

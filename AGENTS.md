@@ -85,7 +85,7 @@ claves.
 | Cómo conectar isbetter.ai | `README.md`, `scripts/servir_comparacion.py:ComparisonEngine`, `ComparisonServer`, `ComparisonHandler`, `validate_request` |
 | Cómo funcionan cola, lock, streaming y HTTP | `scripts/servir_comparacion.py:events`, `do_POST`; `tests/test_comparison_server.py` |
 | Cómo elegir proveedor y modelo remoto en `.env` | `curso/remote.py:route`, `route_settings`, `require_credentials`, `CREDENCIALES`, `chat`; `scripts/preflight.py`; `.env.example`; `docs/modelos-remotos.md` |
-| Diferencias de petición entre proveedores | `curso/remote.py:chat_anthropic`, `chat_completions` (`chat_openai`, `chat_openrouter`, `chat_compatible`), `chat_gemini`, `chat_local`, `chat_google` (`vertex_host` elige el servidor de Vertex AI); `tests/test_proveedores.py` |
+| Diferencias de petición entre proveedores | `curso/remote.py:chat_anthropic`, `chat_completions` (`chat_openai`, `chat_openrouter`, `chat_compatible`; `openrouter_model` y `openrouter_settings` adaptan la petición a cada modelo del catálogo de OpenRouter), `chat_gemini`, `chat_local`, `chat_google` (`vertex_host` elige el servidor de Vertex AI); `tests/test_proveedores.py` |
 | Cómo convertir los datos para Gemini | `scripts/convertir_gemini.py`, `curso/remote.py:gemini_record`, `datos/gemini/ids.json` |
 | Cómo preparar o ejecutar tuning Google | `scripts/gemini_tuning.py:job_spec`, `main`; `curso/remote.py:google_client`; `notebooks/S8-Gemini-Claude.ipynb` |
 | Cómo evaluar modelos remotos y las seis condiciones | `scripts/evaluar_remotos.py:main`, `FIXED_ROUTES`; `scripts/resumir.py:CONDITIONS`, `EXTRA_CONDITIONS`; `docs/ejercicio.md` |

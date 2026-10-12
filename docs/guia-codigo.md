@@ -48,7 +48,9 @@ Esta guía es el orden de lectura. Para tareas concretas («¿cómo entreno?»,
     del adaptador por commit. La segunda acción sí escribe en el servicio remoto.
 13. **S8:** `curso/remote.py` (`route` lee `LLM_PROVIDER`/`LLM_MODEL` de `.env` y
     `chat` llama al adaptador de Anthropic, OpenAI, OpenRouter, API compatible,
-    Gemini, LM Studio o Google Cloud), `scripts/convertir_gemini.py`,
+    Gemini, LM Studio o Google Cloud; en OpenRouter, `openrouter_settings`
+    adapta la petición a lo que admite cada modelo del catálogo),
+    `scripts/convertir_gemini.py`,
     `scripts/gemini_tuning.py` y `scripts/evaluar_remotos.py`. Distinguen
     conversión local, inferencia, subida de datos y entrenamiento gestionado.
 

@@ -23,10 +23,10 @@ corrigieron dos controles incompletos, de severidad baja por tratarse de uso
 local y opcional:
 
 - **Respuestas HTTP acotadas.** Los clientes usan `stream=True` y un lector
-  común que cuenta bytes descomprimidos, rechaza más de 1 MiB y cierra la
-  conexión. No siguen redirecciones automáticas. Limitan profundidad, listas y
-  texto antes de agregarlos, y no convierten una respuesta truncada en un
-  resultado. El texto recibido dentro del límite se conserva completo en la
+  común que cuenta bytes descomprimidos, rechaza más de 1 MiB (8 MiB solo para
+  el catálogo público de modelos de OpenRouter) y cierra la conexión. No siguen
+  redirecciones automáticas. Limitan profundidad, listas y texto antes de
+  agregarlos, y no convierten una respuesta truncada en un resultado. El texto recibido dentro del límite se conserva completo en la
   evidencia aunque supere los 16.384 caracteres admitidos para validación; un
   cuerpo rechazado no se conserva y se registra el fallo.
 - **CSV seguro.** La exportación marca como texto las celdas que una hoja de

@@ -19,8 +19,8 @@ from pathlib import Path
 # Reutiliza funciones del núcleo compartido para mantener el mismo protocolo entre scripts.
 from curso.common import ROOT, read_jsonl, assert_frozen, validate_answer, write_jsonl
 
-# Elección de ruta, comprobación de credenciales y llamada al proveedor remoto.
-from curso.remote import chat, require_credentials, route
+# Elección de ruta, comprobación de credenciales, catálogo de OpenRouter y llamada al proveedor.
+from curso.remote import chat, openrouter_model, require_credentials, route
 
 
 # Condiciones con ruta fija: el par Gemini del ejercicio y la demo histórica por OpenRouter.
@@ -92,7 +92,11 @@ def main():
         provider, model = route(provider, model)
         # Comprueba que existe la clave (o el proyecto) de esa ruta, sin mostrarla.
         require_credentials(provider)
-    # Ruta desconocida, modelo ausente o credencial ausente.
+        # OpenRouter: un ID mal escrito se detecta aquí, en el catálogo gratuito, y no en 30 errores.
+        if provider == "openrouter":
+            # Busca el modelo en el catálogo; si no existe lanza ValueError con el motivo.
+            openrouter_model(model)
+    # Ruta desconocida, modelo ausente, credencial ausente o ID inexistente en OpenRouter.
     except ValueError as exc:
         # Termina con un mensaje de uso antes de la primera llamada.
         p.error(str(exc))

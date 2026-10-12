@@ -8,7 +8,8 @@ Demostración educativa local con datos sintéticos, sin exposición pública.
 - API exclusivamente en 127.0.0.1, con destino local validado y CORS solo
   para https://isbetter.ai.
 - Limitar cuerpos, contexto, salida, conexiones e inferencias pendientes.
-- Clientes HTTP con lectura streaming, máximo 1 MiB descomprimido y cierre
+- Clientes HTTP con lectura streaming, máximo 1 MiB descomprimido (8 MiB solo
+  para el catálogo público de modelos de OpenRouter) y cierre
   de respuesta, sin redirecciones automáticas; validación de modelo hasta
   16.384 caracteres, profundidad JSON 32,
   listas de partes 64 y catálogo local 256 modelos.

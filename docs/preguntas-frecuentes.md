@@ -221,7 +221,7 @@ Cambia `LLM_PROVIDER`, `LLM_MODEL` y pon la clave de esa ruta en `.env`:
 | Quiero usar | `LLM_PROVIDER` | Además |
 |---|---|---|
 | OpenAI | `openai` | `OPENAI_API_KEY` |
-| OpenRouter | `openrouter` | `OPENROUTER_API_KEY`; ID `proveedor/modelo` |
+| Cualquier modelo de OpenRouter (Claude, GPT, GLM, Kimi, DeepSeek…) | `openrouter` | `OPENROUTER_API_KEY`; ID exacto `proveedor/modelo` de su catálogo |
 | Gemini con clave | `gemini` | `GEMINI_API_KEY` |
 | Groq, Mistral, DeepSeek… | `compatible` | `COMPAT_BASE_URL` (https) y `COMPAT_API_KEY` |
 | Ollama o vLLM en tu equipo | `compatible` | `COMPAT_BASE_URL=http://localhost:11434/v1` |
@@ -229,6 +229,23 @@ Cambia `LLM_PROVIDER`, `LLM_MODEL` y pon la clave de esa ruta en `.env`:
 
 Comprueba con `python scripts/preflight.py`. Ejemplos completos en
 [modelos-remotos.md](modelos-remotos.md). Código: `curso/remote.py:route`, `chat`.
+
+### ¿Puedo usar GLM, Kimi, GPT u otro modelo de OpenRouter?
+
+Sí. Pon `LLM_PROVIDER=openrouter`, tu `OPENROUTER_API_KEY` y en `LLM_MODEL` el ID
+exacto de [openrouter.ai/models](https://openrouter.ai/models), por ejemplo
+`z-ai/glm-5.3`, `moonshotai/kimi-k3` u `openai/gpt-6-luna`:
+
+```bash
+python scripts/demo.py --proveedor openrouter --modelo z-ai/glm-5.3 --caso DE-04
+```
+
+Antes de consultar, el repo lee el catálogo público de OpenRouter (gratis) y
+envía solo lo que ese modelo admite: temperatura 0 si la acepta y el
+razonamiento apagado o, si el modelo siempre razona, en su nivel más bajo. Un ID
+inexistente se rechaza sin gastar. Revisa `finish_reason` en la salida: `length`
+significa que el modelo agotó los 180 tokens. Código:
+`curso/remote.py:openrouter_model`, `openrouter_settings`, `chat_openrouter`.
 
 ### ¿Cómo pruebo otro proveedor sin cambiar el `.env`?
 
@@ -255,11 +272,13 @@ Código: `curso/remote.py:route_settings`, `merged`.
 
 ### ¿Cómo se calcula el coste?
 
-OpenRouter informa el importe en `usage.cost`. Anthropic, OpenAI y Google
-devuelven tokens, no importes: el repo multiplica los tokens por la tarifa que
-declares en `LLM_PRECIO_ENTRADA_USD_MTOK` y `LLM_PRECIO_SALIDA_USD_MTOK` (USD por
-millón) para el modelo de `LLM_MODEL`. La plantilla trae la de Claude Haiku 5.5
-(0,10 y 0,50). Sin tarifa, el coste es `null`, que significa no medido.
+OpenRouter informa el importe en `usage.cost`. Anthropic, OpenAI, la Gemini API
+y las APIs compatibles devuelven tokens, no importes: el repo multiplica los
+tokens por la tarifa que declares en `LLM_PRECIO_ENTRADA_USD_MTOK` y
+`LLM_PRECIO_SALIDA_USD_MTOK` (USD por millón) para el modelo de `LLM_MODEL`. La
+plantilla trae la de Claude Haiku 5.5 (0,10 y 0,50): si cambias de modelo,
+cambia también la tarifa o déjala vacía. Sin tarifa, el coste es `null`, que
+significa no medido. Google Cloud (Vertex AI) y LM Studio quedan siempre `null`.
 Código: `curso/remote.py:tariff_cost`.
 
 ### ¿Cómo evalúo un modelo remoto con los 30 casos de test?
@@ -347,6 +366,8 @@ y unas versiones concretos: tu ejecución tendrá sus propias cifras.
 | `… HTTP 401/403` | Clave inválida o sin permiso para ese modelo. |
 | `… HTTP 402` o `429` | Sin saldo o con límite de uso. No se reintenta automáticamente. |
 | `… HTTP 400` | Un parámetro no admitido por ese modelo. Revisa `LLM_TEMPERATURE` y `LLM_EXTRA_BODY`. |
+| `openrouter HTTP 404` | Ningún proveedor de ese modelo acepta lo enviado; suele ser un `LLM_TEMPERATURE` o `LLM_EXTRA_BODY` que el modelo no admite. Vacíalos y prueba de nuevo. |
+| `… no está en el catálogo de OpenRouter` | El ID no existe. Copia el exacto de openrouter.ai/models (formato `proveedor/modelo`). |
 | `Salida no vacía; usa otro --salida…` | El entrenador protege un adaptador anterior. Usa otra carpeta. |
 | `--salida … ya existe; elige otro archivo…` | `demo.py` y los evaluadores no sobrescriben resultados y lo comprueban antes de consultar ningún modelo. Usa otro archivo. |
 | `Datos o protocolo cambiaron…` | Se tocaron datos o prompts congelados. Revisa `git diff -- datos prompts config`. En Windows, una copia descargada con saltos de línea CRLF también cambia los hashes: `.gitattributes` lo evita en copias nuevas; en una antigua, ejecuta `git add --renormalize .` y vuelve a comprobar. |
