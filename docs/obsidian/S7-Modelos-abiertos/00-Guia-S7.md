@@ -242,6 +242,7 @@ mindmap
 | [[06-Prompting-few-shot-y-fine-tuning]] | ¿Qué mejora el resultado sin entrenar y cuándo conviene entrenar? |
 | [[07-Como-se-entrena-un-LoRA]] | ¿Cómo hicimos el fine-tuning con LoRA y qué cambió antes y después? |
 | [[08-Evaluar-y-entregar]] | ¿Cómo demuestro que funciona y qué tengo que entregar? |
+| [[08a-Hugging-Face-subir-descargar-y-ejecutar]] | ¿Cómo subo nuestro adaptador, descargo un commit concreto y compruebo que funciona? |
 
 **Siguiente clase:** [[00-Guia-S8|S8 · Modelos cerrados y APIs]].
 

@@ -206,6 +206,8 @@ flowchart LR
 
 El ejercicio pide publicar el adaptador en **tu** cuenta de Hugging Face, con model card, y demostrar que se puede recargar desde allí. Es una comprobación distinta de la recarga local. `scripts/publicar_adaptador.py` sigue estos pasos:
 
+La guía completa de subida por navegador o script, descarga por commit, hashes y ejecución está en [[08a-Hugging-Face-subir-descargar-y-ejecutar]].
+
 ```mermaid
 sequenceDiagram
     autonumber
@@ -231,7 +233,7 @@ sequenceDiagram
 > El inicio de sesión en Hugging Face es tuyo y local. Nunca incluyas tokens, `.env` ni capturas con claves en la entrega.
 
 > [!note] Estado del adaptador de referencia
-> El adaptador del profesor está recargado y comprobado **localmente**. Su publicación y recarga desde el Hub es una evidencia distinta y se presenta solo cuando exista.
+> El **13/10/2026** se publicó el adaptador del profesor en [JoseAntonioNuevo/the-power-model-classifier](https://huggingface.co/JoseAntonioNuevo/the-power-model-classifier), commit `33b3f2fd0d282d421258520eca867ef9c751034a`. Se descargaron sus cuatro archivos sin token, coincidieron sus hashes y se ejecutó la copia descargada offline sobre la base fijada: `DE-04` dio JSON y esquema válidos, `facturacion` y `media`, en 5,40 segundos de generación. Esta recarga de desarrollo no repite la evaluación de los 30 casos de test. El procedimiento y la evidencia fechada están en [[08a-Hugging-Face-subir-descargar-y-ejecutar]].
 
 ## Qué entregar
 

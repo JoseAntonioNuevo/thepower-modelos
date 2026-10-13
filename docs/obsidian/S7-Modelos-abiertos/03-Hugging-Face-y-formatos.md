@@ -175,6 +175,8 @@ flowchart LR
 
 ## Descarga reproducible desde Python
 
+Para subir nuestro LoRA, descargar su commit y ejecutarlo con la base del curso, sigue [[08a-Hugging-Face-subir-descargar-y-ejecutar]]. El ejemplo siguiente descarga el GGUF original para LM Studio, que es otro artefacto.
+
 Opcional: la misma descarga sin interfaz gráfica, fijando repo, archivo y revisión.
 
 ```python
