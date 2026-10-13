@@ -8,6 +8,109 @@ tags: [thePower, S7, hugging-face, lora, publicacion, reproducibilidad]
 
 Esta guía completa [[03-Hugging-Face-y-formatos]] y [[08-Evaluar-y-entregar]]. Los comandos se ejecutan desde la **raíz del repositorio docente**, con su entorno Python activo. El ensayo del profesor se verificó el **13 de octubre de 2026**.
 
+## Comandos exactos para el profesor · empezar aquí
+
+Este bloque usa las rutas **del Mac del profesor** y la carpeta de cuatro archivos que se preparó para el ensayo. Los alumnos deben usar su propia raíz, usuario y carpeta preparada; el recorrido portable se explica después.
+
+> [!important] Qué se ejecutó realmente en el ensayo
+> La sesión de Hugging Face ya estaba iniciada en Brave. La **subida se hizo con la interfaz web**, no ejecutando `hf auth login` ni `hf upload`. Los comandos de login y subida siguientes son el **equivalente por terminal**, comprobado contra la ayuda de la CLI instalada, y se muestran para que puedas hacer esa demostración. La descarga por commit y la consulta offline sí se ejecutaron y verificaron con Python.
+
+### A · Abrir el proyecto y activar el entorno
+
+```bash
+cd /Users/jose/Documents/the-power/2-modelos
+source .venv/bin/activate
+```
+
+### B · Iniciar sesión en Hugging Face desde la terminal
+
+```bash
+hf auth login
+hf auth whoami
+```
+
+Sigue el flujo interactivo de `hf auth login` antes de compartir pantalla. Para subir necesitas una credencial con permiso de escritura en el destino. `hf auth whoami` debe mostrar **JoseAntonioNuevo** para el comando de subida de este bloque. Una sesión web de Brave no inicia la sesión de la terminal. No uses un token literal como argumento ni lo copies a esta nota.
+
+### C · Subir los cuatro archivos por terminal
+
+La carpeta `.build/hf-ensayo-20261013` del profesor contiene únicamente `adapter_config.json`, `adapter_model.safetensors`, `README.md` y `entrenamiento.json`. Este comando subiría su contenido a la raíz del repositorio ya preparado:
+
+```bash
+hf upload JoseAntonioNuevo/the-power-model-classifier \
+  .build/hf-ensayo-20261013 \
+  . \
+  --commit-message "Publicar adaptador LoRA docente de soporte para S7"
+```
+
+El primer argumento identifica el repositorio, el segundo la carpeta local y el tercero (`.`) la raíz del destino. **Este comando escribe en Hugging Face y puede actualizar los mismos nombres de archivo.** Para repetir la demostración sin modificar el repositorio de referencia, sustituye el destino por un nombre nuevo de tu usuario. Conserva el commit que devuelva esa subida; no presupongas que será el del ensayo anterior. Comprueba la carpeta antes de ejecutarlo: no uses la raíz del proyecto como origen de la subida.
+
+Para mostrar la carpeta en Finder si eliges la ruta web:
+
+```bash
+open .build/hf-ensayo-20261013
+```
+
+Ruta web utilizada: **Files and versions → Contribute → Upload files → Upload file(s) → seleccionar los cuatro archivos → Commit changes to main**.
+
+### D · Descargar el commit probado, sin iniciar sesión
+
+Este bloque reproduce la descarga del ensayo en **otra carpeta**. Rechaza un destino existente para conservarlo:
+
+```bash
+python - <<'PY'
+from pathlib import Path
+from huggingface_hub import snapshot_download
+
+destination = Path("modelos/hf-clase-descargado")
+if destination.exists():
+    raise SystemExit("Elige otra carpeta: este destino ya existe")
+snapshot_download(
+    repo_id="JoseAntonioNuevo/the-power-model-classifier",
+    revision="33b3f2fd0d282d421258520eca867ef9c751034a",
+    allow_patterns=["adapter_config.json", "adapter_model.safetensors", "README.md", "entrenamiento.json"],
+    local_dir=str(destination),
+    force_download=True,
+    token=False,
+)
+print("Descarga terminada:", destination.resolve())
+PY
+```
+
+`token=False` comprueba el acceso público. Para descargar tu propia publicación cambia repo y commit; si es privada, inicia sesión y omite `token=False`. La base necesita estar en caché: en un equipo nuevo ejecuta antes `python scripts/descargar_modelo.py` con red.
+
+### E · Ejecutar la copia recién descargada
+
+```bash
+HF_HUB_OFFLINE=1 python scripts/demo.py \
+  --proveedor qwen \
+  --caso DE-04 \
+  --adaptador modelos/hf-clase-descargado
+```
+
+Para repetir **exactamente la ejecución ya ensayada**, la carpeta descargada del profesor es `modelos/hf-recarga-20261013`:
+
+```bash
+HF_HUB_OFFLINE=1 python scripts/demo.py \
+  --proveedor qwen \
+  --caso DE-04 \
+  --adaptador modelos/hf-recarga-20261013
+```
+
+### F · Alternativa con el script docente: repositorio privado nuevo
+
+Después de iniciar sesión y preparar `modelos/publicacion-hf-s7` como indica el apartado 2:
+
+```bash
+python scripts/publicar_adaptador.py \
+  --repo JoseAntonioNuevo/qwen3-soporte-lora-s7-nuevo \
+  --adaptador modelos/publicacion-hf-s7
+```
+
+Ese nombre debe estar libre. El script **crea un repositorio privado nuevo**, sube y recarga; no sirve para actualizar `the-power-model-classifier`, que ya existe. El apartado 5 detalla su funcionamiento y los límites de la comprobación.
+
+> [!tip] Qué comando elegir en directo
+> Para enseñar **login y subida por terminal**, usa A, B y C. Para enseñar **descarga y ejecución**, usa D y E. Para ejecutar inmediatamente la copia que ya está preparada, usa A y el segundo comando de E. La ruta F es otra alternativa de publicación, no un paso adicional sobre el repo creado en la web.
+
 ## 1 · Qué estamos publicando
 
 Nuestro artefacto es un **adaptador LoRA**: unas matrices pequeñas que aprendieron a clasificar incidencias sintéticas y emitir JSON con `categoria`, `prioridad` y `respuesta`. Para ejecutar la respuesta necesitamos también los pesos y el tokenizer del modelo base.
