@@ -101,7 +101,7 @@ Qwen en Hugging Face que vimos en S7.
 
 Elegimos Gemini para enseñar **adaptación gestionada de un modelo cerrado**:
 Google ejecuta el entrenamiento, muestra métricas y checkpoints y permite
-consultar el resultado desde nuestra aplicación. Este laboratorio ya tenía
+consultar el resultado desde nuestra aplicación. El laboratorio del profesor ya tenía
 proyecto, bucket, credenciales y un presupuesto aprobado. El modelo elegido
 está entre los que admiten SFT en la [lista oficial de modelos compatibles](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/tuning/supervised-tuning/use#supported_models).
 
@@ -265,8 +265,10 @@ sin usar respuestas de Gemini como etiquetas.
 | Test amplio | 78 | Evaluación posterior a la selección | No |
 | Desarrollo | 2 | Demostraciones separadas de la métrica | No |
 
-Hay **445 registros**, **167 respuestas objetivo distintas** y cero preguntas
-exactas duplicadas. Dentro de train:
+El conjunto inicial del ensayo contiene **445 registros**, **167 respuestas
+objetivo distintas** y cero preguntas exactas duplicadas. El paquete público
+añade las **48 preguntas de `test-precios`**: son **493 registros en total**.
+Dentro de train:
 
 | Tipo | Filas |
 |---|---:|
