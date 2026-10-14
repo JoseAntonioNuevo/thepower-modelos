@@ -117,6 +117,16 @@ puedes preparar conversión, especificación y el resto de condiciones.
 
 ## Si no tienes GPU o laboratorio
 
+Para practicar el ajuste con un negocio ficticio en tu cuenta, tienes el
+[laboratorio Nébula Hogar](gemini-negocio.md): dataset, scripts y comparación
+base/ajustado/control completos. Es una práctica independiente del protocolo
+de tickets anterior; sus entregables específicos están en la guía. No mezcles
+sus cifras con la tabla de seis condiciones de S7/S8.
+
+Se puede estudiar sin cuenta o saldo con los 378 originales docentes publicados,
+marcando esa procedencia. Entrenar en una cuenta propia requiere proyecto,
+permisos, bucket, cuota, facturación y presupuesto del alumno.
+
 Se puede utilizar un entorno remoto con GPU si se dispone de acceso. También se
 admite una preparación completa cuando no hay ese acceso: datos comprobados,
 código, configuración, comandos de entrenamiento, recarga y evaluación, y la

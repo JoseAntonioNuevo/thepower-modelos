@@ -1,0 +1,26 @@
+{
+  "dataset_id": "nebula-hogar-alumnos-v1",
+  "origen": "Datos sintéticos del ensayo docente Nébula Hogar v2 del 14/10/2026; sin configuración de la cuenta del profesor.",
+  "files_sha256": {
+    "catalogo.json": "ef0f99c0148d1633da1c82a50f5004089dd28727a9500314c2ca95b0edb5f156",
+    "desarrollo.jsonl": "00ea120cbc87669e3bfa87a5ec291c41a3775c1fccf948add15c9e44e8a3f96d",
+    "gemini/train.jsonl": "f06bd142590ffa3a78177dc1d19d61ee54446a0894ee948dd42f262c34ca70e9",
+    "gemini/validacion.jsonl": "e508e95c5b9b2f8d5b18509d00d51ee8d232411a08b71f9cc8cd8af72c491333",
+    "prompt.txt": "f8a86d29d24037a4e7e9ddf2077cc0f5a1d3f49ed92586189becd57426b97738",
+    "test-precios.jsonl": "bb6bf4e1e966e8a4095940b9354119c65676c844e312001d9ea97ce2dea7f2c9",
+    "test.jsonl": "814c449fc4a593cc069844c18eed56f391dedf53875c7955067f5831f161fa46",
+    "train.jsonl": "9d84c96d534c188bbcaef8ce7a8cf12842adc06a144b4c69345f46f50229b9b4",
+    "validacion.jsonl": "e0b6cc4ad6e21787db3d150587d7a9cc60effa69a09f06df44efe5bc88f77756"
+  },
+  "splits": {
+    "train": 328,
+    "validacion": 37,
+    "test": 78,
+    "test-precios": 48,
+    "desarrollo": 2
+  },
+  "unique_train_targets": 167,
+  "independent_products": 8,
+  "evaluation_version": "cobertura-v2.1",
+  "test_notice": "Test publicado para aprendizaje; para una evaluación ciega nueva prepara otro test antes de desarrollar el caso."
+}

@@ -14,6 +14,14 @@ Estas notas son la documentación de la sesión para repasar después: cada nota
 
 Las cifras proceden del proyecto `2-modelos`: llamadas reales fechadas, datos sintéticos de S7 y scripts comentados.
 
+> [!tip] Repetir Gemini en tu propia cuenta
+> [[05d-Gemini-manual-completo-fine-tuning]] incluye la práctica Nébula Hogar:
+> catálogo y dataset publicados, login ADC, proyecto/bucket propios, presupuesto,
+> subida verificada, entrenamiento, checkpoints, consultas y comparación.
+> Se puede estudiar offline con los originales de referencia. El caso final
+> del ensayo docente fue 48/48 ajustado frente a 8/48 base sin catálogo;
+> el control con catálogo también acierta y el caso amplio conserva fallos.
+
 ## El recorrido de la sesión
 
 ```mermaid

@@ -1,0 +1,77 @@
+{
+  "metrics": [
+    {
+      "checkpoint": 1,
+      "step": 19,
+      "epoch": 2,
+      "train_token_accuracy": 0.775,
+      "validation_token_accuracy": 0.757,
+      "train_loss": 1.216,
+      "validation_loss": 1.342
+    },
+    {
+      "checkpoint": 2,
+      "step": 38,
+      "epoch": 3,
+      "train_token_accuracy": 0.821,
+      "validation_token_accuracy": 0.822,
+      "train_loss": 0.845,
+      "validation_loss": 0.805
+    },
+    {
+      "checkpoint": 3,
+      "step": 57,
+      "epoch": 4,
+      "train_token_accuracy": 0.903,
+      "validation_token_accuracy": 0.877,
+      "train_loss": 0.51,
+      "validation_loss": 0.63
+    },
+    {
+      "checkpoint": 4,
+      "step": 76,
+      "epoch": 5,
+      "train_token_accuracy": 0.946,
+      "validation_token_accuracy": 0.909,
+      "train_loss": 0.268,
+      "validation_loss": 0.448
+    },
+    {
+      "checkpoint": 5,
+      "step": 95,
+      "epoch": 6,
+      "train_token_accuracy": 0.942,
+      "validation_token_accuracy": 0.927,
+      "train_loss": 0.335,
+      "validation_loss": 0.373
+    },
+    {
+      "checkpoint": 6,
+      "step": 114,
+      "epoch": 7,
+      "train_token_accuracy": 0.962,
+      "validation_token_accuracy": 0.94,
+      "train_loss": 0.248,
+      "validation_loss": 0.347
+    },
+    {
+      "checkpoint": 7,
+      "step": 133,
+      "epoch": 8,
+      "train_token_accuracy": 0.972,
+      "validation_token_accuracy": 0.951,
+      "train_loss": 0.112,
+      "validation_loss": 0.288
+    },
+    {
+      "checkpoint": 8,
+      "step": 147,
+      "epoch": 8,
+      "train_token_accuracy": 0.981,
+      "validation_token_accuracy": 0.956,
+      "train_loss": 0.089,
+      "validation_loss": 0.297
+    }
+  ],
+  "note": "Loss/token accuracy con respuesta objetivo anterior; no exactitud autónoma de preguntas."
+}

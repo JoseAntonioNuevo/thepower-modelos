@@ -89,6 +89,7 @@ claves.
 | Diferencias de petición entre proveedores | `curso/remote.py:chat_anthropic`, `chat_completions` (`chat_openai`, `chat_openrouter`, `chat_compatible`; `openrouter_model` y `openrouter_settings` adaptan la petición a cada modelo del catálogo de OpenRouter), `chat_gemini`, `chat_local`, `chat_google` (`vertex_host` elige el servidor de Vertex AI); `tests/test_proveedores.py` |
 | Cómo convertir los datos para Gemini | `scripts/convertir_gemini.py`, `curso/remote.py:gemini_record`, `datos/gemini/ids.json` |
 | Cómo preparar o ejecutar tuning Google | `scripts/gemini_tuning.py:job_spec`, `main`; `curso/remote.py:google_client`; `notebooks/S8-Gemini-Claude.ipynb` |
+| Cómo repetir Nébula Hogar con la cuenta del alumno | `docs/gemini-negocio.md`, `scripts/gemini_laboratorio.py`; `curso/gemini_laboratorio.py:prepare`, `upload`, `create`, `choose`, `evaluate`; `curso/negocio.py:dataset_check`, `grade` |
 | Cómo evaluar modelos remotos y las seis condiciones | `scripts/evaluar_remotos.py:main`, `FIXED_ROUTES`; `scripts/resumir.py:CONDITIONS`, `EXTRA_CONDITIONS`; `docs/ejercicio.md` |
 | Cómo se calcula el coste | `curso/remote.py:tariff_cost`, `chat_completions`; `LLM_PRECIO_*` en `.env.example` |
 | Qué hay que entregar | `docs/ejercicio.md` |
@@ -162,6 +163,15 @@ En Git están código, datos sintéticos, prompts, locks, notebooks y docs.
 `modelos/`, `resultados/`, `material/`, `.build/`, `.env` y entornos son locales
 e ignorados. Es normal que no existan en una copia nueva: no remitas al alumno
 a notas, ZIP, capturas o adaptadores que no están en Git, ni a cuentas de otra persona.
+
+La práctica independiente Nébula Hogar sí incluye `datos/nebula-hogar/`,
+`scripts/gemini_laboratorio.py` y las referencias docentes depuradas en
+`docs/referencias/nebula-hogar/`. No usa IDs o endpoints del profesor.
+`comprobar`/`preparar` son offline; las acciones Cloud leen la configuración
+propia de `resultados/gemini-nebula/`. Las escrituras/inferencias requieren
+`--autorizar-gasto`, las salidas existentes se conservan y el checkpoint se
+selecciona antes de test. Los tests publicados son material docente; no prueban
+generalización ciega. No edites sus hashes para esconder cambios o fallos.
 
 El checkpoint original se descarga con `scripts/descargar_modelo.py`; el
 adaptador se obtiene al entrenar. Tras entrenar, su carpeta contiene

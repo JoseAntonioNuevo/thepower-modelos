@@ -31,5 +31,10 @@ flowchart LR
 
 Cada carpeta tiene sus notas numeradas en orden de clase. Los diagramas están dentro de las notas, en bloques `mermaid`.
 
+> [!tip] Laboratorio Gemini publicado para alumnos
+> [[05d-Gemini-manual-completo-fine-tuning]] explica el ajuste de Nébula Hogar
+> con tus recursos de Google Cloud. Dataset, scripts y referencias vienen en
+> Git; la preparación offline no necesita credenciales.
+
 > [!tip] Si ves el código en lugar del diagrama
 > Obsidian pide permiso antes de dibujar diagramas Mermaid en un vault nuevo. Pulsa el botón de permitir sobre el primer diagrama: se aplica a todo el vault.

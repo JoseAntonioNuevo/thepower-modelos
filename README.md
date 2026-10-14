@@ -18,6 +18,11 @@ Si trabajas con un asistente de IA, puedes preguntarle cualquier cosa del repo:
 [AGENTS.md](AGENTS.md) le da el mapa y
 [las preguntas frecuentes](docs/preguntas-frecuentes.md) le dan las respuestas.
 
+**Nuevo laboratorio Gemini: [Nébula Hogar en tu propia cuenta](docs/gemini-negocio.md).**
+Incluye catálogo ficticio, dataset completo, scripts, guía con Mermaid y resultados
+fechados. Puedes estudiar y comprobar todo offline o entrenar con tu proyecto,
+bucket, ADC y presupuesto. Es independiente del clasificador de tickets de S7.
+
 ## Contenido
 
 - [Las dos clases](#las-dos-clases)
@@ -131,6 +136,8 @@ curso/                    Núcleo compartido
   qwen.py                 Carga Qwen (y su adaptador), chat template y generación
   remote.py               Proveedores remotos y locales: route() + chat() desde .env
   http.py                 Lectura acotada y segura de respuestas HTTP
+  negocio.py              Dataset Nébula Hogar y evaluación de cobertura
+  gemini_laboratorio.py    Cuenta propia: presupuesto, subida, job y comparación
 
 scripts/                  Comandos de la práctica
   preflight.py            Comprueba datos, dependencias y configuración (sin inferencia)
@@ -143,11 +150,14 @@ scripts/                  Comandos de la práctica
   servir_comparacion.py   API local con qwen-original y qwen-lora-soporte para isbetter.ai
   convertir_gemini.py     Convierte los datos al formato de ajuste de Gemini
   gemini_tuning.py        Prepara, sube, crea y consulta el ajuste gestionado de Gemini
+  gemini_laboratorio.py   Laboratorio portable de negocio, sin recursos del profesor
   publicar_adaptador.py   Publica el adaptador en tu cuenta de Hugging Face y lo recarga
   preparar_datos.py       Generó el dataset sintético (ejecutarlo lo regenera)
 
 datos/                    Train 240, validación 30, test 30 y desarrollo 6 (JSONL)
   gemini/                 Los mismos datos en formato Gemini e ids.json
+  nebula-hogar/           Catálogo y prompt; 328 train, 37 validación, 78 test,
+                          48 test de precios, 2 desarrollo, conversión y hashes
 prompts/                  basico.txt (instrucciones) y fewshot-ids.json (4 ejemplos)
 config/                   experimento-congelado.json: modelo, revisión y hashes
 notebooks/                S7-LoRA.ipynb y S8-Gemini-Claude.ipynb, por etapas
@@ -417,6 +427,24 @@ gemini_base` / `gemini_ajustado` comparan base y ajustado. Una llamada de
 inferencia a Gemini por otra ruta no demuestra un ajuste.
 [Procedimiento](docs/modelos-remotos.md#ajuste-real-de-gemini).
 
+### 5. Laboratorio de negocio en tu propia cuenta
+
+Para repetir el caso probado de Nébula Hogar usa la
+[guía del alumno](docs/gemini-negocio.md). Esta práctica tiene datos propios,
+proyecto y bucket explícitos, subida con hashes, job registrado, selección por
+validación y tres condiciones: base, ajustado y base con catálogo como control.
+
+```bash
+# Offline: no requiere Google Cloud ni hace inferencia.
+python scripts/gemini_laboratorio.py comprobar
+python scripts/gemini_laboratorio.py --help
+```
+
+Los JSONL y scripts vienen en Git. La guía muestra login ADC, APIs, bucket,
+presupuesto y todos los comandos Cloud. Subir, crear o generar respuestas
+requiere `--autorizar-gasto`; preparar solo escribe configuración local.
+Los resultados quedan en `resultados/`, ignorado por Git.
+
 ## Resultados de referencia
 
 Ejecución del **2 de octubre de 2026** sobre los 30 casos de test, con datos
@@ -429,13 +457,20 @@ sintéticos y sin reparar respuestas ([JSON](docs/resultados-referencia.json)):
 | Qwen3-0.6B + LoRA | Local, Apple M5 | 26/30 |
 | Claude Haiku 4.5, prompt + few-shot | OpenRouter | 24/30 |
 | Gemini 3.1 Flash-Lite, prompt básico (demo adicional) | OpenRouter | 26/30 |
-| Gemini base y ajustado | Google Cloud | Pendiente |
+| Gemini base y ajustado, clasificador de tickets | Google Cloud | Pendiente en esta tabla |
 | Claude Haiku 5.5, ruta actual del curso | API de Anthropic | Pendiente |
 
 Son cifras de una ejecución identificada, con las versiones de dependencias de
 entonces: no son una garantía ni un ranking universal, y tu entorno debe
 evaluarse de nuevo. Treinta casos sintéticos no deciden qué modelo es mejor en
 general. LoRA no tiene obligación de ganar.
+
+El ensayo **Nébula Hogar del 14/10/2026** es una referencia independiente:
+precio por nombre **8/48 base, 48/48 ajustado y 48/48 base con catálogo**;
+caso amplio **9/78, 49/78 y 64/78**. Incluye ocho hechos de precio, un alcance
+desarrollado iterativamente y fallos que se conservan. Puedes leer
+[378 originales y métricas](docs/referencias/nebula-hogar/README.md) sin usar saldo;
+no son resultados de tu cuenta ni una garantía de mejora universal.
 
 ## Ejercicios
 
@@ -480,6 +515,7 @@ comprueba lo que te diga en el código, que es la fuente de verdad.
 | [docs/guia-codigo.md](docs/guia-codigo.md) | Orden de lectura del código, de un ejemplo de datos al informe |
 | [docs/experimento.md](docs/experimento.md) | Protocolo: datos, condiciones, métricas y reglas que no se rompen |
 | [docs/modelos-remotos.md](docs/modelos-remotos.md) | Proveedores, `.env`, ajustes, coste, evaluación remota y Gemini |
+| [docs/gemini-negocio.md](docs/gemini-negocio.md) | Laboratorio Gemini completo con dataset y scripts para tu propia cuenta |
 | [docs/ejercicio.md](docs/ejercicio.md) | Ejercicios de S7 y S8 |
 | [docs/resultados-referencia.json](docs/resultados-referencia.json) | Cifras de referencia fechadas y sus limitaciones |
 | [AGENTS.md](AGENTS.md) | Guía para asistentes de IA |

@@ -1,0 +1,106 @@
+{
+  "experiment_date": "2026-10-14",
+  "base_model": "gemini-3.1-flash-lite",
+  "epochs": 8,
+  "adapter_size_reported": 4,
+  "learning_rate_multiplier_reported": 2,
+  "training_examples": 328,
+  "validation_examples": 37,
+  "dataset_training_tokens_console": 129078,
+  "job_duration_minutes": 86.55,
+  "source": "Ensayo real del profesor; metadatos de cuenta/recursos retirados. Textos originales sin modificar.",
+  "generation": {
+    "temperature": 0,
+    "maxOutputTokens": 384,
+    "thinkingConfig": {
+      "thinkingLevel": "MINIMAL"
+    }
+  },
+  "evaluations": {
+    "test": {
+      "base_sin_catalogo": {
+        "casos": 78,
+        "caso_completo": 9,
+        "json_valido": 78,
+        "esquema_valido": 46,
+        "estado_correcto": 58,
+        "productos_correctos": 46,
+        "hechos_requeridos": 10,
+        "errores_api": 0,
+        "tokens_entrada": 28275,
+        "tokens_salida": 5906
+      },
+      "ajustado_sin_catalogo": {
+        "casos": 78,
+        "caso_completo": 49,
+        "json_valido": 78,
+        "esquema_valido": 77,
+        "estado_correcto": 77,
+        "productos_correctos": 74,
+        "hechos_requeridos": 52,
+        "errores_api": 0,
+        "tokens_entrada": 28275,
+        "tokens_salida": 4021
+      },
+      "base_con_catalogo_control": {
+        "casos": 78,
+        "caso_completo": 64,
+        "json_valido": 78,
+        "esquema_valido": 78,
+        "estado_correcto": 73,
+        "productos_correctos": 74,
+        "hechos_requeridos": 68,
+        "errores_api": 0,
+        "tokens_entrada": 188097,
+        "tokens_salida": 5698
+      }
+    },
+    "test-precios": {
+      "base_sin_catalogo": {
+        "casos": 48,
+        "caso_completo": 8,
+        "json_valido": 48,
+        "esquema_valido": 8,
+        "estado_correcto": 48,
+        "productos_correctos": 8,
+        "hechos_requeridos": 13,
+        "errores_api": 0,
+        "tokens_entrada": 17391,
+        "tokens_salida": 2870
+      },
+      "ajustado_sin_catalogo": {
+        "casos": 48,
+        "caso_completo": 48,
+        "json_valido": 48,
+        "esquema_valido": 48,
+        "estado_correcto": 48,
+        "productos_correctos": 48,
+        "hechos_requeridos": 48,
+        "errores_api": 0,
+        "tokens_entrada": 17391,
+        "tokens_salida": 2064
+      },
+      "base_con_catalogo_control": {
+        "casos": 48,
+        "caso_completo": 48,
+        "json_valido": 48,
+        "esquema_valido": 48,
+        "estado_correcto": 48,
+        "productos_correctos": 48,
+        "hechos_requeridos": 48,
+        "errores_api": 0,
+        "tokens_entrada": 115743,
+        "tokens_salida": 2903
+      }
+    }
+  },
+  "files_sha256": {
+    "metricas-checkpoints.json": "f960928a6dc0fa63f3fb487ab13848e8f120aa91b5d6e0d515b139d2f2170676",
+    "test-ajustado_sin_catalogo.jsonl": "c6e174797110de5274ac987c267e1b5c5dea90602ada57c85df4e027a7609389",
+    "test-base_con_catalogo_control.jsonl": "d0adc123f1681c93510b3b3dcee4d2f533de65cf50e38a924812e25c41b61bbc",
+    "test-base_sin_catalogo.jsonl": "a5d69df76ba0a7ae47ad896d2d4c5bbbaf2815a6c2f1fdc0c327b7be4d828a0b",
+    "test-precios-ajustado_sin_catalogo.jsonl": "af33973e7201c6a97473264e1d511f042e46a72a38c88ae2ca6f609934053e4f",
+    "test-precios-base_con_catalogo_control.jsonl": "05e12c370e4262a88fd93551666bcf597fb4f2ded19d37b2d8f79bb482bbc22a",
+    "test-precios-base_sin_catalogo.jsonl": "06f37a2ba9c7bf3f361ce1626d89a4b1e4b3b01f2fbf77dc0a82ffe8277df810"
+  }
+}
