@@ -1200,4 +1200,3 @@ independiente de la ejecución real. El paquete público no ha creado otro job.
 
 Vuelve a [la guía S8](00-Guia-S8.md), [el README](../../../README.md) o
 [el ejercicio del curso](../../ejercicio.md) para situar este laboratorio.
-
