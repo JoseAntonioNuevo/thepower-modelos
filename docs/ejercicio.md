@@ -57,6 +57,10 @@ hardware y sus tiempos.
 
 ## S8 · Modelos cerrados
 
+**Para hacerlo paso a paso, sigue la [guía única Gemini S7 → Claude](guia-S8-gemini-claude.md).**
+Incluye todos los comandos, preparación de permisos con el administrador,
+evidencias del ajuste y tabla final; también cómo recibir ayuda de una IA.
+
 Realiza un fine-tuning real de Gemini con el problema y los datos de S7. Añade
 Claude sin ajustar y compara modelos abiertos y cerrados. Claude es una
 referencia adicional y no sustituye el entrenamiento.

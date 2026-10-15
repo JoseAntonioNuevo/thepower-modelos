@@ -4,6 +4,11 @@ tags: [thePower, S8, Gemini, fine-tuning, comandos, ensayo]
 
 # Gemini: del dataset al modelo ajustado, paso a paso
 
+> [!tip] Recorrido único del alumno
+> Para completar el ejercicio desde cero, con permisos IAM y la comparación
+> con Claude, sigue [la guía única S8](../../guia-S8-gemini-claude.md).
+> Esta nota conserva el guion breve de comandos y ensayo del profesor.
+
 **La API de AI Studio permite consultar Gemini con una clave. Este ajuste se ejecuta en Vertex AI, con credenciales de Google Cloud. La prueba «API lista» confirma la primera conexión; para demostrar un ajuste necesitamos un trabajo terminado y predicciones de su endpoint.**
 
 ```mermaid

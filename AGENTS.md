@@ -30,6 +30,42 @@ El [README](README.md) los resume; las tareas concretas están en
 
 ## Cómo responder a un alumno
 
+### Guía principal del ejercicio S8: Gemini con datos de S7 y Claude
+
+Para «cómo hago el fine-tuning de Gemini», «cómo configuro permisos» o
+«cómo lo comparo con Claude», empieza por
+[docs/guia-S8-gemini-claude.md](docs/guia-S8-gemini-claude.md).
+Es el recorrido único del ejercicio de incidencias: instalación → identidad ADC
+→ proyecto/bucket y permisos → conversión S7 → presupuesto → subida → creación
+de un único job → estado/endpoint → desarrollo → test Gemini/Claude → seis
+condiciones y entrega. README, ejercicio y notas S8 enlazan a la misma guía.
+
+- Lee el paso concreto y el script asociado antes de dar comandos. Explica
+  propósito, entradas, efectos, salida esperada y cómo verificarla. Define ADC,
+  IAM, bucket, job, endpoint, épocas y few-shot cuando el alumno no los entienda.
+- Pregunta solo el paso/error/entorno que falte; diagnostica offline primero.
+  Distingue tareas del alumno y del administrador. Un alumno sin `setIamPolicy`
+  no puede concederse permisos. No lo resuelvas dando Owner/Editor ni roles de
+  agente de servicio a una persona, ni haciendo público el bucket.
+- Los permisos del humano y los del agente gestionado son distintos. Comprueba
+  identidad ADC, proyecto de cuota, recurso y permiso denegados; no inventes
+  miembros IAM ni uses identidades/endpoints del profesor. Los roles del paso 4
+  son una receta de laboratorio, no una garantía contra políticas de organización.
+- El recorrido usa `scripts/gemini_tuning.py` y datos S7 (240/30/30).
+  `scripts/gemini_laboratorio.py`, `--autorizar-gasto`, `vincular` y la selección
+  automática de checkpoints pertenecen a Nébula Hogar: no traslades esas opciones
+  al script de soporte. Conserva un job incierto antes de plantear otra creación.
+- Mantén las instrucciones iguales entre Gemini base/ajustado. Claude recibe
+  los cuatro ejemplos fijados de S7. El repo usa Haiku 5.5; el correo original
+  mencionaba 4.5. Explica la diferencia y registra el modelo real sin atribuir
+  resultados de una versión a otra.
+- Sigue las autorizaciones del alumno: leer/explicar no autoriza entrenar,
+  cambiar IAM, subir datos ni gastar. Una autorización válida ya dada para el
+  mismo destino/acción no necesita repetirse. No pidas claves ni muestres `.env`.
+- La sección 16 contiene un prompt de ayuda para alumnos. Usa el mismo documento
+  como referencia canónica y actualízalo si cambia la receta; evita duplicar otra
+  guía completa en las notas. `CLAUDE.md` debe seguir como enlace relativo aquí.
+
 El alumno suele preguntar «¿cómo hago…?», «¿qué hace esto?» o «¿por qué falla?».
 Responde de forma sencilla y comprobable:
 
@@ -88,6 +124,7 @@ claves.
 | Cómo elegir proveedor y modelo remoto en `.env` | `curso/remote.py:route`, `route_settings`, `require_credentials`, `CREDENCIALES`, `chat`; `scripts/preflight.py`; `.env.example`; `docs/modelos-remotos.md` |
 | Diferencias de petición entre proveedores | `curso/remote.py:chat_anthropic`, `chat_completions` (`chat_openai`, `chat_openrouter`, `chat_compatible`; `openrouter_model` y `openrouter_settings` adaptan la petición a cada modelo del catálogo de OpenRouter), `chat_gemini`, `chat_local`, `chat_google` (`vertex_host` elige el servidor de Vertex AI); `tests/test_proveedores.py` |
 | Cómo convertir los datos para Gemini | `scripts/convertir_gemini.py`, `curso/remote.py:gemini_record`, `datos/gemini/ids.json` |
+| Recorrido completo S8, permisos IAM y ayuda paso a paso | `docs/guia-S8-gemini-claude.md`, pasos 1–16; scripts `gemini_tuning.py`, `convertir_gemini.py`, `evaluar_remotos.py`, `resumir.py` |
 | Cómo preparar o ejecutar tuning Google | `scripts/gemini_tuning.py:job_spec`, `main`; `curso/remote.py:google_client`; `notebooks/S8-Gemini-Claude.ipynb` |
 | Cómo repetir Nébula Hogar con la cuenta del alumno | `docs/gemini-negocio.md`, `scripts/gemini_laboratorio.py`; `curso/gemini_laboratorio.py:prepare`, `upload`, `create`, `choose`, `evaluate`; `curso/negocio.py:dataset_check`, `grade` |
 | Cómo evaluar modelos remotos y las seis condiciones | `scripts/evaluar_remotos.py:main`, `FIXED_ROUTES`; `scripts/resumir.py:CONDITIONS`, `EXTRA_CONDITIONS`; `docs/ejercicio.md` |

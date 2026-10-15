@@ -201,6 +201,9 @@ a contents/parts; test queda separado. `ids.json` mantiene correspondencia.
 
 ## Ajuste real de Gemini
 
+Para ejecutar el ejercicio completo, usa la [guía única S8](guia-S8-gemini-claude.md):
+permisos, datos de S7, entrenamiento y comparación con Claude, paso a paso.
+
 Necesitas proyecto identificado, permisos, facturación/presupuesto, bucket,
 cuota y acceso al modelo. Configura .env.example y autentica tu cuenta con
 Google. No tomar un proyecto personal por defecto como laboratorio.

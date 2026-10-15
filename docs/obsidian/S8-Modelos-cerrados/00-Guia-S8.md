@@ -4,6 +4,10 @@ tags: [thePower, AI-Engineer, S8, modelos-cerrados, APIs]
 
 # S8 · Modelos cerrados y APIs: conectar, comparar y decidir
 
+> [!tip] Hacer el ejercicio completo
+> [Guía única del alumno: Gemini con datos de S7 y Claude](../../guia-S8-gemini-claude.md).
+> Incluye instalación, permisos, entrenamiento, evaluación y ayuda con IA.
+
 > [!question] La pregunta que resolvemos hoy
 > **¿Cómo conecto mi aplicación a estos modelos y qué pruebas necesito para elegir el que mejor resuelve mi tarea?**
 

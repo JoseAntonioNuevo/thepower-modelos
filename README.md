@@ -413,6 +413,12 @@ usaron en cada condición. Evaluar el test hace 30 llamadas de pago a tu cuenta.
 
 ### 4. Ajuste gestionado de Gemini
 
+**Empieza por la [guía única S8: Gemini con los datos de S7 y comparación con
+Claude](docs/guia-S8-gemini-claude.md).** Incluye instalación, credenciales ADC,
+permisos del alumno y del servicio Google, comandos de entrenamiento, endpoint,
+evaluación de las seis condiciones, errores frecuentes y cómo pedir ayuda a
+una IA con `AGENTS.md`. Es el recorrido principal del ejercicio de incidencias.
+
 ```bash
 python scripts/convertir_gemini.py
 python scripts/gemini_tuning.py preparar --proyecto ID_PROYECTO --bucket BUCKET
