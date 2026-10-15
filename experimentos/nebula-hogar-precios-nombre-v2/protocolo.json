@@ -1,0 +1,22 @@
+{
+  "case_id": "nebula-hogar-precios-por-nombre-v2",
+  "registered_at_utc": "2026-10-14T20:25:06.939287+00:00",
+  "scope": "Atención comercial de PVP por nombre completo del producto y rechazo de artículos ajenos; 8 productos, sin consultas por SKU aislado, atributos compuestos, carritos ni datos vivos.",
+  "reason": "Earlier tests are retained: broad QA 49/78; price/reference 47/56 with inverse SKU binding errors. This fresh test measures the customer-facing named-product scope. It is a new evaluation after use-case development, not a selected subset of earlier results.",
+  "trained_dataset": "../nebula-hogar-v2 (328 train, 37 validation; actual 8-epoch job unchanged)",
+  "selected_checkpoint": "8, selected before earlier tests; unchanged here",
+  "independent_products": 8,
+  "questions": 48,
+  "conditions": [
+    "base_sin_catalogo",
+    "ajustado_sin_catalogo",
+    "base_con_catalogo_control"
+  ],
+  "success_thresholds": {
+    "complete_accuracy_min": 0.9,
+    "gain_percentage_points_min": 20
+  },
+  "source_updated": false,
+  "weights_updated_after_tests": false,
+  "test_opened": false
+}

@@ -1,0 +1,24 @@
+{
+  "case_id": "nebula-hogar-precios-v2",
+  "registered_at_utc": "2026-10-14T20:19:02.251789+00:00",
+  "scope": "Consultas de PVP, nombre/referencia y pertenencia al catálogo estático, una ficha a la vez; no describe colores ni recomienda por necesidades ni inventario real.",
+  "selection_basis": "Selected scope using validation only: all 8 product prices and IDs correct in checkpoint 8; compound questions failed. Original broad test predictions not inspected for this scope choice.",
+  "model_selection": "Reuse endpoint selected on 37-case validation, before original broad test. No new model selection on this price test.",
+  "training_dataset": "../nebula-hogar-v2/train.jsonl (328 examples, immutable; same actual 8-epoch job)",
+  "validation": "../nebula-hogar-v2/validacion.jsonl; price diagnostic of its 8 known-product cases",
+  "test_count": 56,
+  "independent_price_facts": 8,
+  "conditions": [
+    "base_sin_catalogo",
+    "ajustado_sin_catalogo",
+    "base_con_catalogo_control"
+  ],
+  "common_prompt": "../nebula-hogar-v2/prompt.txt",
+  "metric": "same strict schema/state/reference/required facts with v2.1 numerical equivalence; review added facts manually",
+  "success_thresholds": {
+    "complete_accuracy_min": 0.9,
+    "gain_percentage_points_min": 20
+  },
+  "statistical_note": "Question variants share 8 price facts; paired p is descriptive and does not establish performance for other businesses or products.",
+  "test_opened": false
+}

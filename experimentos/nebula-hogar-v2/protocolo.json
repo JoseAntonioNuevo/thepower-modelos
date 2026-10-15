@@ -1,0 +1,39 @@
+{
+  "experimento": "nebula-hogar-v2-20261014",
+  "business": "ficticio; conocimiento estático de 8 productos y 16 políticas",
+  "base_model": "gemini-3.1-flash-lite",
+  "project": "gen-lang-client-0913716113",
+  "location": "europe-west4",
+  "serving_location": "eu",
+  "bucket": "thepower-s8-653878673654-eu",
+  "gcs_prefix": "nebula-hogar-v2-20261014",
+  "epochs": 8,
+  "adapter_size": "service_default",
+  "learning_rate_multiplier": "service_default",
+  "generation": {
+    "temperature": 0,
+    "maxOutputTokens": 384,
+    "thinkingConfig": {
+      "thinkingLevel": "MINIMAL"
+    }
+  },
+  "conditions": [
+    "base_sin_catalogo",
+    "ajustado_sin_catalogo",
+    "base_con_catalogo_control"
+  ],
+  "selection": "Antes de test: hasta 3 checkpoints espaciados, elegir mayor exactitud completa en validacion; empate favorece checkpoint posterior.",
+  "test": "Una sola pasada por condicion tras seleccionar checkpoint; sin reparación, reintentos correctores ni cambio de rúbrica.",
+  "primary_metric": "esquema y estado y conjunto exacto de productos y todos los grupos de hechos requeridos",
+  "content_review": "Revisar originales contra la fuente para detectar contradicciones o hechos inventados; automatismo es cobertura, no prueba de veracidad total.",
+  "success_pre_registered": {
+    "min_complete_test_accuracy": 0.8,
+    "min_gain_over_base_percentage_points": 20,
+    "paired_mcnemar_two_sided_p_max": 0.05
+  },
+  "context_control": "El control base recibe todo el catálogo y políticas como contexto; se informa aparte, no se mezcla con el par sin catálogo.",
+  "leakage_boundary": "Mismos hechos de negocio conocidos; preguntas exactas nuevas y composiciones nuevas. Esto mide retención/composición, no generalización a productos no enseñados.",
+  "authorized_budget_usd": 5,
+  "previous_estimated_spend_usd": 0.3867564,
+  "test_uploaded": false
+}

@@ -1,0 +1,63 @@
+{
+  "files_sha256": {
+    "catalogo.json": "ef0f99c0148d1633da1c82a50f5004089dd28727a9500314c2ca95b0edb5f156",
+    "desarrollo.jsonl": "00ea120cbc87669e3bfa87a5ec291c41a3775c1fccf948add15c9e44e8a3f96d",
+    "gemini/train.jsonl": "f06bd142590ffa3a78177dc1d19d61ee54446a0894ee948dd42f262c34ca70e9",
+    "gemini/validacion.jsonl": "e508e95c5b9b2f8d5b18509d00d51ee8d232411a08b71f9cc8cd8af72c491333",
+    "prompt.txt": "f8a86d29d24037a4e7e9ddf2077cc0f5a1d3f49ed92586189becd57426b97738",
+    "protocolo.json": "24c20825531c041d206299106b8b678d9ebdf112262df6ab06b187b1261ba76a",
+    "test.jsonl": "814c449fc4a593cc069844c18eed56f391dedf53875c7955067f5831f161fa46",
+    "train.jsonl": "9d84c96d534c188bbcaef8ce7a8cf12842adc06a144b4c69345f46f50229b9b4",
+    "validacion.jsonl": "e0b6cc4ad6e21787db3d150587d7a9cc60effa69a09f06df44efe5bc88f77756"
+  },
+  "codigo_evaluador_sha256": "289de95b52cebc9823dff78f538fee31f1b2e2aa7dca22d508654368ddfc521d",
+  "splits": {
+    "train": 328,
+    "validacion": 37,
+    "test": 78,
+    "desarrollo": 2
+  },
+  "types": {
+    "train": {
+      "producto": 152,
+      "politica": 64,
+      "carrito": 28,
+      "comparacion": 28,
+      "recomendacion": 16,
+      "carrito_cantidad": 8,
+      "no_catalogo": 10,
+      "aclaracion": 6,
+      "sin_datos": 6,
+      "limites": 6,
+      "fuera_ambito": 4
+    },
+    "validacion": {
+      "producto_compuesto": 8,
+      "politica": 8,
+      "recomendacion": 8,
+      "carrito": 4,
+      "no_catalogo": 2,
+      "aclaracion": 2,
+      "sin_datos": 2,
+      "limites": 2,
+      "fuera_ambito": 1
+    },
+    "test": {
+      "producto_compuesto": 24,
+      "politica": 16,
+      "recomendacion": 8,
+      "carrito": 8,
+      "carrito_cantidad": 4,
+      "no_catalogo": 4,
+      "aclaracion": 4,
+      "sin_datos": 4,
+      "limites": 4,
+      "fuera_ambito": 2
+    },
+    "desarrollo": {
+      "demo": 2
+    }
+  },
+  "unique_train_targets": 167,
+  "exact_duplicate_questions": 0
+}
