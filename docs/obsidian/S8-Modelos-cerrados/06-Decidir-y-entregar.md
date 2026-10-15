@@ -101,8 +101,8 @@ xychart-beta
 | Qwen3-0.6B + LoRA | Local, Mac M5 | 30 | 30 | 26 | 29 | **26** | 3,07 | no medido |
 | Claude Haiku 4.5, prompt + few-shot | OpenRouter → Amazon Bedrock | 30 | 30 | 26 | 28 | **24** | 1,42 | 0,0249 USD |
 | Gemini 3.1 Flash-Lite, prompt básico | OpenRouter → Google | 30 | 30 | 26 | 30 | **26** | 1,10 | 0,0044 USD |
-| Gemini base · Google Cloud | Google Cloud | — | — | — | — | **pendiente** | — | — |
-| Gemini ajustado · Google Cloud | Google Cloud | — | — | — | — | **pendiente** | — | — |
+| Gemini base · Google Cloud | Google Cloud | — | — | — | — | **sin ejecución en esa fecha** | — | — |
+| Gemini ajustado · Google Cloud | Google Cloud | — | — | — | — | **sin ejecución en esa fecha** | — | — |
 
 ```mermaid
 ---

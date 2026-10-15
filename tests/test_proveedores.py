@@ -572,7 +572,7 @@ class Providers(unittest.TestCase):
             # Vertex AI con few-shot.
             chat("incidencia", "google", "gemini-3.1-flash-lite", True)
 
-    # Vertex AI: eu usa el servidor multirregión .rep y un modelo ajustado usa la región de su recurso.
+    # Tuning regional y serving multirregión son ubicaciones distintas para Gemini 3.1.
     def test_google_endpoint_host_and_tuned_region(self):
         # Servidor de cada tipo de ubicación según la documentación de Google Cloud.
         self.assertEqual(vertex_host("eu"), "aiplatform.eu.rep.googleapis.com")
@@ -595,10 +595,21 @@ class Providers(unittest.TestCase):
             ),
             (
                 tuned,
-                f"https://europe-west4-aiplatform.googleapis.com/v1/{tuned}:generateContent",
+                "https://aiplatform.eu.rep.googleapis.com/v1/projects/demo/locations/eu"
+                "/endpoints/123:generateContent",
+            ),
+            (
+                "projects/demo/locations/us-central1/endpoints/456",
+                "https://aiplatform.us.rep.googleapis.com/v1/projects/demo/locations/us"
+                "/endpoints/456:generateContent",
+            ),
+            (
+                "projects/demo/locations/eu/endpoints/123",
+                "https://aiplatform.eu.rep.googleapis.com/v1/projects/demo/locations/eu"
+                "/endpoints/123:generateContent",
             ),
         )
-        # Prueba los dos casos.
+        # Prueba base, ajustes en Europa/EE. UU. y un endpoint ya expresado en eu.
         for model, url in cases:
             # Sesión autenticada simulada: registra la URL sin conectar con Google.
             session = Mock()

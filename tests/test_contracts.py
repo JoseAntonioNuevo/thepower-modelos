@@ -32,7 +32,7 @@ from curso.common import (
 from curso.remote import gemini_record, google_client
 
 # Especificación offline del tuning de Gemini.
-from gemini_tuning import job_spec
+from gemini_tuning import job_spec, tuning_config
 
 # Cálculo del resumen por condición.
 from resumir import summarize
@@ -207,6 +207,17 @@ class Contracts(unittest.TestCase):
         with self.assertRaises(ValueError):
             # Proyecto ausente.
             job_spec(None, "bucket")
+
+    # El SDK instalado exige un enum para adapter_size; un entero hacía fallar crear.
+    def test_tuning_config_uses_sdk_adapter_enum(self):
+        from google.genai import types
+
+        spec = job_spec("curso-demo", "bucket-demo")
+        config = tuning_config(spec)
+        self.assertEqual(config.adapter_size, types.AdapterSize.ADAPTER_SIZE_EIGHT)
+        self.assertEqual(config.epoch_count, 2)
+        self.assertEqual(config.validation_dataset.gcs_uri, spec["validation_uri"])
+        self.assertNotIn("test.jsonl", config.model_dump_json())
 
     # Falla si importar el módulo intentara enviar una petición HTTP.
     def test_imports_do_not_connect(self):

@@ -207,8 +207,10 @@ Google. No tomar un proyecto personal por defecto como laboratorio.
 
 La receta usa europe-west4 para tuning y eu para serving. `eu` es una
 multirregión: el código la consulta en `aiplatform.eu.rep.googleapis.com`. El
-modelo ajustado se consulta en la región que figura en su recurso
-(`projects/…/locations/europe-west4/…`). Verifica soporte, regiones y tarifas
+modelo ajustado de Gemini 3.1 Flash-Lite también se consulta por `eu`: el código
+convierte `locations/europe-west4` del endpoint recibido en `locations/eu`
+para inferencia y conserva el ID. `estado` consulta el trabajo en `europe-west4`.
+Verifica soporte, regiones y tarifas
 actuales. Estima tokens, épocas, almacenamiento e inferencia.
 El presupuesto del script es una comprobación previa, no un tope de Google.
 

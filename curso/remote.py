@@ -1083,17 +1083,21 @@ def chat_google(incident, model):
     project = os.environ["GOOGLE_CLOUD_PROJECT"]
     # Región de servicio de los modelos publicados: eu por defecto, también si .env la deja vacía.
     location = os.getenv("GEMINI_SERVING_LOCATION") or "eu"
-    # Un recurso ajustado ya lleva su región (projects/…/locations/europe-west4/endpoints/…):
-    # la petición debe ir al servidor de esa misma región.
+    # Gemini 3.1 Flash-Lite se ajusta en europe-west4/us-central1, pero se sirve
+    # por las multirregiones eu/us. El ID del endpoint se conserva; cambia la ubicación
+    # de la ruta de inferencia, como indica la documentación de tuning de Google.
     if model.startswith("projects/"):
-        # El nombre completo del recurso se usa tal cual en la URL.
-        resource = model
         # Trozos del nombre separados por "/"; la región va justo después de "locations".
         parts = model.split("/")
         # Solo si el nombre contiene locations/<región>.
         if "locations" in parts[:-1]:
-            # La región es el trozo que sigue a "locations".
-            location = parts[parts.index("locations") + 1]
+            index = parts.index("locations") + 1
+            # La ubicación del recurso determina la residencia; no la sustituye .env.
+            location = {"europe-west4": "eu", "us-central1": "us"}.get(
+                parts[index], parts[index]
+            )
+            parts[index] = location
+        resource = "/".join(parts)
     # Modelo publicado por Google, por ejemplo gemini-3.1-flash-lite.
     else:
         # Ruta del modelo publicado dentro del proyecto y la región de servicio.

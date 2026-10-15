@@ -56,10 +56,31 @@ def job_spec(project, bucket):
         "epochs": 2,
         # Tamaño del adaptador que entrena Google, comparable al rango 8 de la receta LoRA de S7.
         "adapter_size": 8,
-        # Región de consulta del modelo base (GEMINI_SERVING_LOCATION); el modelo ajustado
-        # se consulta en la región que figura en el nombre de su recurso.
+        # Multirregión de consulta: base y ajustado se sirven por eu.
+        # El trabajo y su estado se consultan en europe-west4.
         "serving_location": "eu",
     }
+
+
+# Construye la configuración con los tipos reales del SDK, también para el ensayo offline.
+def tuning_config(spec):
+    from google.genai import types
+
+    # google-genai 1.42 no admite el entero 8: espera AdapterSize.ADAPTER_SIZE_EIGHT.
+    # La receta conserva su tamaño numérico en la especificación y lo traduce aquí.
+    sizes = {
+        1: types.AdapterSize.ADAPTER_SIZE_ONE,
+        2: types.AdapterSize.ADAPTER_SIZE_TWO,
+        4: types.AdapterSize.ADAPTER_SIZE_FOUR,
+        8: types.AdapterSize.ADAPTER_SIZE_EIGHT,
+        16: types.AdapterSize.ADAPTER_SIZE_SIXTEEN,
+    }
+    return types.CreateTuningJobConfig(
+        tuned_model_display_name="thepower-soporte-s8",
+        epoch_count=spec["epochs"],
+        adapter_size=sizes[spec["adapter_size"]],
+        validation_dataset=types.TuningDataset(gcs_uri=spec["validation_uri"]),
+    )
 
 
 # Despacha la acción CLI: la preparación es offline; subir/crear/estado usan Google.
@@ -124,6 +145,10 @@ def main():
                 {
                     # Especificación del trabajo.
                     "spec": spec,
+                    # Valida también los tipos del SDK sin construir cliente ni llamar a Google.
+                    "config_sdk": tuning_config(spec).model_dump(
+                        mode="json", exclude_none=True
+                    ),
                     # Manifiesto del experimento congelado.
                     "experimento": frozen,
                     # Recordatorio: preparar no llama a Google.
@@ -187,19 +212,8 @@ def main():
                 base_model=spec["base_model"],
                 # JSONL de train en Cloud Storage.
                 training_dataset=types.TuningDataset(gcs_uri=spec["train_uri"]),
-                # Configuración del trabajo:
-                config=types.CreateTuningJobConfig(
-                    # nombre visible del modelo ajustado en la consola de Google Cloud,
-                    tuned_model_display_name="thepower-soporte-s8",
-                    # épocas de la receta,
-                    epoch_count=spec["epochs"],
-                    # tamaño del adaptador
-                    adapter_size=spec["adapter_size"],
-                    # y validación: Google mide la pérdida con este archivo, sin entrenar con él.
-                    validation_dataset=types.TuningDataset(
-                        gcs_uri=spec["validation_uri"]
-                    ),
-                ),
+                # Configuración validada por el SDK: nombre, épocas, tamaño 8 y validación.
+                config=tuning_config(spec),
             )
             # Carpeta local de recibos del tuning; resultados/ está fuera de Git.
             path = ROOT / "resultados/google-tuning"

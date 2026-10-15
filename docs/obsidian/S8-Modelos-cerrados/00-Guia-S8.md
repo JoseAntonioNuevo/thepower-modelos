@@ -178,6 +178,7 @@ mindmap
 | [[03-Respuesta-consumo-y-coste]] | ¿Qué devuelve el servicio y qué tengo que registrar? |
 | [[04-Comparar-por-tareas]] | ¿Cómo comparo modelos con pruebas en documentos, código y planes? |
 | [[05-Fine-tuning-gestionado]] | ¿Cómo se ajusta un modelo que no puedo descargar y qué lo demuestra? |
+| [[05a-Gemini-comandos-y-ensayo]] | ¿Qué comandos uso y qué necesito para mostrar Gemini ajustado en directo? |
 | [[06-Decidir-y-entregar]] | ¿Abierto, cerrado o híbrido? ¿Qué tengo que entregar? |
 
 **Clase anterior:** [[00-Guia-S7|S7 · Modelos abiertos]].

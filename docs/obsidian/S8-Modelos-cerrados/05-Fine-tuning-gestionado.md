@@ -68,6 +68,9 @@ flowchart TB
 > [!important] La frase para recordar
 > En S7 guardábamos un adaptador local. En un ajuste gestionado entregamos los datos al servicio y obtenemos un recurso de modelo ajustado. Para demostrarlo necesitamos identificar el trabajo, comprobar que terminó y usar su resultado.
 
+> [!tip] Comandos y ensayo de clase
+> Abre [[05a-Gemini-comandos-y-ensayo]] para autenticación ADC, servicios, bucket privado, subida, creación, estado, endpoint y comparación. El ensayo distingue la preparación local del entrenamiento real.
+
 ## 1 · Convertir los datos de S7
 
 Reutilizamos **exactamente** las particiones de S7. `scripts/convertir_gemini.py` transforma cada fila al formato que espera Google:
@@ -237,7 +240,7 @@ flowchart LR
 ```
 
 > [!note] Estado del laboratorio
-> El laboratorio de Google Cloud y el ajuste real de Gemini están **pendientes**: aún no hay proyecto del curso configurado, ni trabajo, ni modelo ajustado que mostrar. En clase explicamos la conversión y la especificación preparada; no presentamos resultados de un ajuste que no existe.
+> Para demostrar un ajuste hacen falta el recibo, estado final, endpoint y predicciones. [[05a-Gemini-comandos-y-ensayo]] contiene el recorrido completo de preparación y ensayo. Una especificación offline se presenta como preparación, y las cifras de evaluación se identifican por fecha y ruta.
 
 > [!question] Pregunta al grupo
 > Si el proveedor retira el modelo base dentro de un año, ¿qué pasa con tu modelo ajustado? ¿Y con el adaptador LoRA de S7?
